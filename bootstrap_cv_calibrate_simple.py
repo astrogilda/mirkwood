@@ -32,6 +32,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error as mse
 from scipy import optimize
 import gc
+from calibrate import *
 
 EPS = 1e-6
 
@@ -106,40 +107,6 @@ def interval_sharpness(yt, yp, confint=0.6827):
 
 ########################
 
-
-
-## fix to_return_comb. 08/18/2020
-def inv_cdf(b, w, p, mean_val, std_val, std_epis_val, orig_val, mean_test, std_test, std_epis_test):
-    if p>1:
-        p=p/100
-    mean_val = np.asarray(mean_val)
-    std_val = np.asarray(std_val)
-    std_epis_val = np.asarray(std_epis_val)
-    orig_val = np.asarray(orig_val)
-    mean_test = np.asarray(mean_test)
-    std_test = np.asarray(std_test)
-    std_epis_test = np.asarray(std_epis_test)
-    to_return_al = (mean_test + b) + std_test*np.quantile(((mean_val + b) - orig_val)/std_val, p)
-    common_std = np.median(mean_test)*np.sqrt((std_test/np.median(mean_test))**2 + w*(std_epis_test/np.median(mean_test))**2)
-    to_return_comb = to_return_al #(mean_test + b) + common_std*np.quantile(((mean_val + b) - orig_val)/common_std, p)
-    return to_return_al, to_return_comb
-
-
-def crude_shift(x, mean_val, std_val, std_epis_val, orig_val, mean_test, std_test, std_epis_test, orig_test):
-    orig_test = np.asarray(orig_test)
-    p_true = np.arange(0,1.0001,0.001)
-    p_pred = list()
-    #b, w = x[0], x[1]
-    b = x
-    w = 1
-    #if we are bootstrapping, then we'd like to calibrate epistemic+aleatoric error. if not, we'd like to calibrate aleatoric error
-    for p_j in p_true:
-        inv_cdf_op = inv_cdf(b, w, p=p_j, mean_val=mean_val, std_val=std_val, std_epis_val=std_epis_val, orig_val=orig_val, mean_test=mean_test, std_test=std_test, std_epis_test=std_epis_test)[int(CAL_COMB_FLAG)]
-        p_pred.append(np.mean(orig_test<inv_cdf_op))
-    p_pred = np.asarray(p_pred)
-    return np.sqrt(mse(p_pred, p_true))
-
-
 from balanced_binning import BalancedBinningReference
 def weightify(y_train, n_bins=50):
     # reweight samples by inverse square root of frequency.
@@ -199,40 +166,43 @@ def bootstrap_func_mp(estimator, x, y, x_val, x_noise=None, x_transformer=None, 
     #x_res, x_val = np.log10(x_res), np.log10(x_val)
     #####################
     if x_transformer is not None:
-        print('fitting x_tr for bag #{}'.format(iteration_num))
+        #print('fitting x_tr for bag #{}'.format(iteration_num))
         x_transformer = x_transformer.fit(x_res)
         x_res = x_transformer.transform(x_res)
         x_val = x_transformer.transform(x_val)
     if y_transformer is not None:
-        print('fitting y_tr for bag #{}'.format(iteration_num))
-        y_transformer = y_transformer.fit(y_res.reshape(-1,1))
-        y_res = y_transformer.transform(y_res.reshape(-1,1)).reshape(-1,)
-    print('ngboost fit started for bootstrap bag #{}'.format(iteration_num))
+        #print('fitting y_tr for bag #{}'.format(iteration_num))
+        list_of_fitted_transformers = []
+        for ytr in y_transformer:
+            ytr = ytr.fit(y_res.reshape(-1,1))
+            y_res = ytr.transform(y_res.reshape(-1,1)).reshape(-1,)
+            list_of_fitted_transformers.append(ytr)
+    #print('ngboost fit started for bootstrap bag #{}'.format(iteration_num))
     _ = estimator.fit(x_res, y_res, X_noise=x_noise, sample_weight=y_res_weights)
-    print('ngboost fit complete for bootstrap bag #{}'.format(iteration_num))
+    #print('ngboost fit complete for bootstrap bag #{}'.format(iteration_num))
     y_pred = estimator.pred_dist(x_val)
-    print('predicted y_pdf for x_val for bootstrap bag #{}'.format(iteration_num))
+    #print('predicted y_pdf for x_val for bootstrap bag #{}'.format(iteration_num))
     y_pred_mean = y_pred.loc.reshape(-1,)
-    #print('extracted y_mean for y_val for bootstrap bag #{}'.format(iteration_num))
-    print('bootstrap bag #%d: max, min of y_mean is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
+    ##print('extracted y_mean for y_val for bootstrap bag #{}'.format(iteration_num))
+    #print('bootstrap bag #%d: max, min of y_mean is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
     y_pred_std = y_pred.scale.reshape(-1,)
-    #print('extracted y_std for y_val for bootstrap bag #{}'.format(iteration_num))
-    print('bootstrap bag #%d: max, min of y_std is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_std), np.ma.min(y_pred_std)))
+    ##print('extracted y_std for y_val for bootstrap bag #{}'.format(iteration_num))
+    #print('bootstrap bag #%d: max, min of y_std is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_std), np.ma.min(y_pred_std)))
     y_pred_upper = (y_pred_mean + y_pred_std).reshape(-1,)
     y_pred_lower = (y_pred_mean - y_pred_std).reshape(-1,)
-    print('bootstrap bag #%d: max, min of y_pred_upper is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
-    print('bootstrap bag #%d: max, min of y_pred_lower is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
+    #print('bootstrap bag #%d: max, min of y_pred_upper is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
+    #print('bootstrap bag #%d: max, min of y_pred_lower is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
     #y_pred_std[y_pred_std>np.max(np.abs(y_pred_mean))] = np.max(np.abs(y_pred_mean))
-    #print('new max, min of y_std is %.2f, %.2f'%(y_pred_std.max(), y_pred_std.min()))
+    ##print('new max, min of y_std is %.2f, %.2f'%(y_pred_std.max(), y_pred_std.min()))
     # SHAP Summary Plots
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         explainer_mean = shap.TreeExplainer(estimator, model_output=0)
         shap_values_mean = explainer_mean.shap_values(x_val, check_additivity=False)
-        print('bootstrap bag #%d: shap_values_mean calculated'%iteration_num)
+        #print('bootstrap bag #%d: shap_values_mean calculated'%iteration_num)
         explainer_std = shap.TreeExplainer(estimator, model_output=1)
         shap_values_std = explainer_std.shap_values(x_val, check_additivity=False)
-        print('bootstrap bag #%d: shap_values_std calculated'%iteration_num)
+        #print('bootstrap bag #%d: shap_values_std calculated'%iteration_num)
     ### removing samples with high std dev.
     y_pred_upper = np.ma.masked_where(y_pred_upper>=2*y_pred_mean, y_pred_upper)
     mask = y_pred_upper.mask
@@ -247,24 +217,28 @@ def bootstrap_func_mp(estimator, x, y, x_val, x_noise=None, x_transformer=None, 
         shap_values_std_new[:,i] = np.ma.array(shap_values_std[:,i], mask=mask).reshape(-1,)
     shap_values_mean = shap_values_mean_new.copy()
     shap_values_std = shap_values_std_new.copy()
+    print(np.max(y_pred_upper), np.min(y_pred_upper), np.median(y_pred_upper))
     ###
     if y_transformer is not None:
-        #print('inverse fitting y_tr for bag #{}'.format(iteration_num))
-        y_pred_upper = y_transformer.inverse_transform(y_pred_upper.reshape(-1,1)).reshape(-1,)
-        print('bootstrap bag #%d: inverse fitting y_pred_upper successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
-        y_pred_lower = y_transformer.inverse_transform(y_pred_lower.reshape(-1,1)).reshape(-1,)
-        print('bootstrap bag #%d: inverse fitting y_pred_lower successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
-        y_pred_mean = y_transformer.inverse_transform(y_pred_mean.reshape(-1,1)).reshape(-1,)
-        print('bootstrap bag #%d: inverse fitting y_pred_mean successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
+        ##print('inverse fitting y_tr for bag #{}'.format(iteration_num))
+        for ytr in reversed(list_of_fitted_transformers):
+            y_pred_upper = ytr.inverse_transform(y_pred_upper.reshape(-1,1)).reshape(-1,)
+            #print('bootstrap bag #%d: inverse fitting y_pred_upper successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
+            y_pred_lower = ytr.inverse_transform(y_pred_lower.reshape(-1,1)).reshape(-1,)
+            #print('bootstrap bag #%d: inverse fitting y_pred_lower successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
+            y_pred_mean = ytr.inverse_transform(y_pred_mean.reshape(-1,1)).reshape(-1,)
+            #print('bootstrap bag #%d: inverse fitting y_pred_mean successful, max=%.2f and min=%.2f are '%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
+        print('after inverse y_transforming:', np.max(y_pred_upper), np.min(y_pred_upper), np.median(y_pred_upper))
     ##################3
     if reversifyfn is not None:
-        print('reversifying predictions')
+        #print('reversifying predictions')
         y_pred_upper = reversifyfn(y_pred_upper)
-        print('bootstrap bag #%d: max, min of y_pred_upper_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
+        #print('bootstrap bag #%d: max, min of y_pred_upper_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_upper), np.ma.min(y_pred_upper)))
         y_pred_lower = reversifyfn(y_pred_lower)
-        print('bootstrap bag #%d: max, min of y_pred_lower_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
+        #print('bootstrap bag #%d: max, min of y_pred_lower_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_lower), np.ma.min(y_pred_lower)))
         y_pred_mean = reversifyfn(y_pred_mean)
-        print('bootstrap bag #%d: max, min of y_pred_upper_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
+        #print('bootstrap bag #%d: max, min of y_pred_upper_reversified is %.2f, %.2f'%(iteration_num, np.ma.max(y_pred_mean), np.ma.min(y_pred_mean)))
+    print('after reversifying y:', np.max(y_pred_upper), np.min(y_pred_upper), np.median(y_pred_upper))
     #
     y_pred_std = (np.ma.masked_invalid(y_pred_upper)-np.ma.masked_invalid(y_pred_lower))/2
     return np.ma.masked_invalid(y_pred_mean), np.ma.masked_invalid(y_pred_std), np.ma.masked_invalid(y_pred_lower), np.ma.masked_invalid(y_pred_upper), np.ma.masked_invalid(shap_values_mean), np.ma.masked_invalid(shap_values_std)
@@ -287,7 +261,8 @@ def simple_train_predict(estimator, x_df, y, cv_to_use, x_noise=None, x_transfor
     #if grid_search_best_params is not None:
     #    estimator_best = estimator.set_params(**grid_search_best_params['estimator'])
     #
-    for train_idx, val_idx in cv_to_use:
+    for i, (train_idx, val_idx) in enumerate(cv_to_use):
+        print('CV fold %d of %d'%(i+1, np.shape(cv_to_use)[0]))
         xtrain_temp = x_df.loc[train_idx].copy().reset_index(drop='index').values
         xval_temp = x_df.loc[val_idx].copy().reset_index(drop='index').values
         ytrain_temp = y[train_idx]
@@ -345,18 +320,22 @@ def simple_train_predict(estimator, x_df, y, cv_to_use, x_noise=None, x_transfor
             shap_std_array = np.ma.masked_invalid(shap_std_array)
             #08/18/2020. replacing mean with median and std with MAD in below 3 lines
             yval_pred_mean = np.ma.mean(mu_array, axis=0)
-            yval_pred_lower = np.ma.mean(lower_array, axis=0)
-            yval_pred_upper = np.ma.mean(upper_array, axis=0)
+            #yval_pred_lower = np.ma.mean(lower_array, axis=0)
+            #yval_pred_upper = np.ma.mean(upper_array, axis=0)
             yval_pred_std = np.ma.sqrt(np.ma.mean(std_array**2, axis=0))
             yval_pred_std_epis = np.ma.std(mu_array, axis=0)
+            yval_pred_lower = yval_pred_mean - yval_pred_std
+            yval_pred_upper = yval_pred_mean + yval_pred_std
             yval_shap_mean = np.ma.mean(shap_mu_array, axis=0)
             yval_shap_std = np.ma.mean(shap_std_array, axis=0)
             if MEDIANFLAG:
                 yval_pred_mean = np.ma.median(mu_array, axis=0)
-                yval_pred_lower = np.ma.median(lower_array, axis=0)
-                yval_pred_upper = np.ma.median(upper_array, axis=0)
                 yval_pred_std = np.ma.sqrt(np.ma.median(std_array**2, axis=0))
                 yval_pred_std_epis = mad_std(mu_array, axis=0)
+                #yval_pred_lower = np.ma.median(lower_array, axis=0)
+                #yval_pred_upper = np.ma.median(upper_array, axis=0)
+                yval_pred_lower = yval_pred_mean - yval_pred_std
+                yval_pred_upper = yval_pred_mean + yval_pred_std
                 yval_shap_mean = np.ma.median(shap_mu_array, axis=0)
                 yval_shap_std = np.ma.median(shap_std_array, axis=0)
             ### removing samples with high std dev.
@@ -379,20 +358,23 @@ def simple_train_predict(estimator, x_df, y, cv_to_use, x_noise=None, x_transfor
             yval_shap_std = yval_shap_std_new.copy()
             ## checking whether std and std_epis are of the same shape
             assert yval_pred_std.shape==yval_pred_std_epis.shape
+            print(yval_shap_mean.shape[0], yval_pred_std.shape[0])
+            assert yval_pred_std.shape[0]==yval_shap_mean.shape[0]
         '''
         if save_boot:
             #change shape from (num_bs, x_val.shape[0]) to (x_val.shape[0], num_bs)
             pd.DataFrame(np.hstack((np.asarray(concat_output[0]).T, np.asarray(concat_output[1]).T, np.asarray(y[val_idx]).reshape(-1,1), np.asarray(val_idx).reshape(-1,1))), columns=['bag#_%d_mean'%i for i in range(NUM_BS)] + ['bag#_%d_alstd'%i for i in range(NUM_BS)] + ['truth'] + ['index']).to_csv('Bagging_index_low=%d_index_high=%d_time=%s.csv'%(np.asarray(val_idx).min(), np.asarray(val_idx).max(), datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
          '''
-    #
-    yval_pred_mean_list.extend(yval_pred_mean)
-    yval_pred_lower_list.extend(yval_pred_lower)
-    yval_pred_upper_list.extend(yval_pred_upper)
-    yval_pred_std_list.extend(yval_pred_std)
-    yval_pred_std_epis_list.extend(yval_pred_std_epis)
-    yval_list.extend(yval_temp)
-    yval_shap_mean_list.extend(yval_shap_mean)
-    yval_shap_std_list.extend(yval_shap_std)
+        #
+        yval_pred_mean_list.extend(yval_pred_mean)
+        yval_pred_lower_list.extend(yval_pred_lower)
+        yval_pred_upper_list.extend(yval_pred_upper)
+        yval_pred_std_list.extend(yval_pred_std)
+        yval_pred_std_epis_list.extend(yval_pred_std_epis)
+        yval_list.extend(yval_temp)
+        yval_shap_mean_list.extend(yval_shap_mean)
+        yval_shap_std_list.extend(yval_shap_std)
+        print(np.shape(yval_pred_mean_list), np.shape(yval_shap_mean_list))
     return yval_pred_mean_list, yval_pred_std_list, yval_pred_lower_list, yval_pred_upper_list, yval_pred_std_epis_list, yval_list, yval_shap_mean_list, yval_shap_std_list
 
 
@@ -406,11 +388,11 @@ from sklearn.ensemble import BaggingRegressor
 from tune_sklearn import TuneSearchCV
 
 
-def ngb_nobs_cv(estimator, x_df, y, x_noise=None, x_transformer=None, y_transformer=None, save_boot=False, max_samples_best=0.8, weight_bins=10, reversifyfn=None):
+def ngb_nobs_cv(estimator, x_df, y, x_noise=None, x_transformer=None, y_transformer=None, save_boot=False, max_samples_best=0.8, weight_bins=10, reversifyfn=None, n_folds=5):
     #yval_pred_mean_list = list()
     #yval_preds_std_list = list()
     #yval_list = list()
-    cv_val = custom_cv(y, n_folds=n_folds_val)
+    cv_val = custom_cv(y, n_folds=n_folds)
     max_samples_best=0.8
     #
     if HPO_FLAG: 
@@ -475,7 +457,7 @@ def ngb_nobs_cv(estimator, x_df, y, x_noise=None, x_transformer=None, y_transfor
     estimator_best = estimator.set_params(**grid_search_best_params)
     #    
     yval_pred_mean_list, yval_pred_std_list, yval_pred_lower_list, yval_pred_upper_list, yval_pred_std_epis_list, yval_list, yval_shap_mean_list, yval_shap_std_list = simple_train_predict(estimator=estimator_best, x_df=x_df, y=y, cv_to_use=cv_val, x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise, save_boot=save_boot, max_samples_best=max_samples_best, weight_bins=weight_bins, reversifyfn=reversifyfn)
-    return yval_pred_mean_list, yval_pred_std_list, yval_pred_lower_list, yval_pred_upper_list, yval_pred_std_epis_list, yval_list, estimator_best, max_samples_best
+    return yval_pred_mean_list, yval_pred_std_list, yval_pred_lower_list, yval_pred_upper_list, yval_pred_std_epis_list, yval_list, estimator_best, max_samples_best, yval_shap_mean_list, yval_shap_std_list
 
 
 
@@ -532,17 +514,17 @@ label_list=['Mass', 'Dust Mass', 'Metallicity', 'Star Formation Rate']
 #              'Dust Mass':logdustmass,
 #              'Metallicity':logmet,
 #              'Star Formation Rate':logsfr}
-label_rev_func = {'Mass': lambda x: np.float_power(10, x),
-                  'Dust Mass': lambda x: np.float_power(10, x) - 1,
-                  'Metallicity': lambda x: np.float_power(10, x),
-                  'Star Formation Rate': lambda x: np.float_power(10, x) - 1}
+label_rev_func = {'Mass': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=20)),
+                  'Dust Mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                  'Metallicity': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                  'Star Formation Rate': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1}
 
 ############################################################3
 
 
 EPIS_FLAG = BOOT_FLAG = True
 CAL_COMB_FLAG = False
-CALIBRATE_FLAG = False
+CALIBRATE_FLAG = True
 zfac = 1
 x_noise = 0.5 #* np.ones((1, X.shape[1]))
 #ngb = NGBoost(Base=default_tree_learner, Dist=Normal, Score=MLE, learning_rate=0.04, n_estimators=600, natural_gradient=True, verbose=False)
@@ -554,15 +536,31 @@ run_num_test = 0
 
 # x_transformer = mms() gives retarded results.
 x_transformer = None # don't modify x_transformer at all, it'll break the addition of x_noise
-y_transformer = True
+y_transformer = [rs(), mms()]
 
 train_data = ['simba', 'eagle', 'tng']
 test_data = None
 
+timestr = time.strftime("%Y%m%d")#-%H%M%S")
+ytest_filename = 'test_metrics_' + timestr + '.csv'
+val_filename = 'validation_metrics_' + timestr + '.csv'
+
+ytest_cal_filename = 'test_cal_metrics_' + timestr + '.csv'
+
+ytestattrib_filename = 'test_shap_' + timestr + '.pkl'
+valattrib_filename = 'validation_shap_' + timestr + '.pkl'
+
+ytestattrib_std_filename = 'test_shap_std_' + timestr + '.pkl'
+valattrib_std_filename = 'validation_shap_std_' + timestr + '.pkl'
+
+num_nearest_nbrs = 200
+distpower = 0
+OPTIMIZE_FLAG = False
+
 ##########################################
 ##########################################
 time_start = time.time()
-for label_str in [0]:
+for label_str in [1]:
     for x_noise in [.2]:
         # calibrated
         y_test_preds_cal_lower = list()
@@ -583,7 +581,6 @@ for label_str in [0]:
         best_w = list()
         #
         plt.close('all')
-        timestr = time.strftime("%Y%m%d")#-%H%M%S")
         snr = 1000 if x_noise==0 else 1/x_noise
         print('Label=%s, SNR=%d'%(label_list[label_str], int(snr)))
         #
@@ -600,8 +597,14 @@ for label_str in [0]:
             print('training and testing on %s'%train_data)
             X, logy = get_data(train_data)
             label1 = logy[label_str]
-            train_val_idxs, test_idxs = zip(*custom_cv(label1, n_folds=n_folds_test)[0:])
-        for train_val_idx, test_idx in zip(train_val_idxs, test_idxs):
+            train_val_idxs, test_idxs = zip(*custom_cv(label1, n_folds=n_folds_test)[0:1])
+        #n_folds_test_inuse = np.shape(train_val_idxs)[0]
+        for n_fold_test_inuse, (train_val_idx, test_idx) in enumerate(zip(train_val_idxs, test_idxs)):
+            ytest_filename_thisfold = ytest_filename.split('.csv')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.csv'
+            #
+            ytestattrib_filename_thisfold = ytestattrib_filename.split('.pkl')[0] + label_list[label_str] + '_' + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.pkl'
+            ytestattrib_std_filename_thisfold = ytestattrib_std_filename.split('.pkl')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.pkl'
+            #
             X_train_val = X.loc[train_val_idx].copy().reset_index(drop='index')
             y_train_val = label1[train_val_idx]
             #
@@ -619,6 +622,12 @@ for label_str in [0]:
             y_test_pred_std_final = np.sqrt(y_test_pred_std**2 + y_test_pred_std_epis**2).reshape(-1,1)
             y_test_shap_mean = np.array(y_test_shap_mean)
             y_test_shap_std = np.array(y_test_shap_std)
+            #
+            pd.DataFrame(np.hstack((y_test, y_test_pred_mean, y_test_pred_lower, y_test_pred_upper, y_test_pred_std_epis)), columns=['true', 'pred_mean', 'pred_lower', 'pred_upper', 'pred_epis_std']).to_csv(ytest_filename_thisfold)
+            #
+            pd.DataFrame(y_test_shap_mean).to_pickle(ytestattrib_filename_thisfold)
+            pd.DataFrame(y_test_shap_std).to_pickle(ytestattrib_std_filename_thisfold)
+            #
             print('total run time = %.1f minutes'%((time.time() - time_start)/60))
             # appending results of individual folds to lists:
             y_tests.extend(y_test)
@@ -633,20 +642,33 @@ for label_str in [0]:
             if CALIBRATE_FLAG:
                 #'''
                 print('beginning calibration')
+                val_filename_thisfold = val_filename.split('.csv')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.csv'
+                ytest_cal_filename_thisfold = ytest_cal_filename.split('.csv')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.csv'
                 #
-                y_val_preds_mean, y_val_preds_std, y_val_preds_lower, y_val_preds_upper, y_val_preds_std_epis, y_val, final_model, max_samples_best = ngb_nobs_cv(estimator=ngb_pipeline(), x_df=np.log10(1+X_train_val), y=y_train_val, x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise, reversifyfn=reversify_func, save_boot=False, weight_bins=weight_bins)
-                y_val_preds_mean = np.asarray(y_val_preds_mean)
-                y_val_preds_std = np.asarray(y_val_preds_std)
-                y_val_preds_lower = np.asarray(y_val_preds_lower)
-                y_val_preds_upper = np.asarray(y_val_preds_upper)  
-                y_val_preds_std_epis = np.asarray(y_val_preds_std_epis)
-                y_val = np.asarray(y_val)
-                #y_val_preds_std = 0.5*(reversify_func(y_val_preds_mean+y_val_preds_std)-reversify_func(y_val_preds_mean-y_val_preds_std))
-                #y_val_preds_std_epis = 0.5*(reversify_func(y_val_preds_mean+y_val_preds_std_epis)-reversify_func(y_val_preds_mean-y_val_preds_std_epis))
-                #y_val_preds_mean = reversify_func(y_val_preds_mean)
-                #y_val = reversify_func(y_val)
+                valattrib_filename_thisfold = valattrib_filename.split('.pkl')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.pkl'
+                valattrib_std_filename_thisfold = valattrib_std_filename.split('.pkl')[0] + '_' + label_list[label_str] + str(n_fold_test_inuse+1) + 'of' + str(n_folds_test) + '.pkl'
                 #
-                result = optimize.fmin_powell(crude_shift, [0], args=(y_val_preds_mean, y_val_preds_std, y_val_preds_std_epis, y_val, y_test_pred_mean, y_test_pred_std, y_test_pred_std_epis, y_test))
+                y_val_preds_mean, y_val_preds_std, y_val_preds_lower, y_val_preds_upper, y_val_preds_std_epis, y_val, final_model, max_samples_best, y_val_shap_mean, y_val_shap_std = ngb_nobs_cv(estimator=ngb_pipeline(), x_df=np.log10(1+X_train_val), y=y_train_val, x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise, reversifyfn=reversify_func, save_boot=False, weight_bins=weight_bins, n_folds=n_folds_val)
+                y_val = np.asarray(y_val).reshape(-1,1)
+                y_val_preds_mean = np.asarray(y_val_preds_mean).reshape(-1,1)
+                y_val_preds_std = np.asarray(y_val_preds_std).reshape(-1,1)
+                y_val_preds_lower = np.asarray(y_val_preds_lower).reshape(-1,1)
+                y_val_preds_upper = np.asarray(y_val_preds_upper).reshape(-1,1)  
+                y_val_preds_std_epis = np.asarray(y_val_preds_std_epis).reshape(-1,1)
+                y_val_shap_mean = np.asarray(y_val_shap_mean)
+                y_val_shap_std = np.asarray(y_val_shap_std)
+                #
+                pd.DataFrame(np.hstack((y_val, y_val_preds_mean, y_val_preds_std, y_val_preds_std_epis)), columns=['val_true', 'val_pred_mean', 'val_std_al', 'val_std_epis']).to_csv(val_filename_thisfold)
+                #
+                pd.DataFrame(y_test_shap_mean).to_pickle(valattrib_filename_thisfold)
+                pd.DataFrame(y_test_shap_std).to_pickle(valattrib_std_filename_thisfold)
+                #
+                #predicted_cal_df = calibrate(val_filename=val_filename_thisfold, ytest_filename=ytest_filename_thisfold, savefilename=ytest_cal_filename_thisfold, verbose=1, valattrib_filename=valattrib_filename_thisfold, ytestattrib_filename=ytestattrib_filename_thisfold, numnn=num_nearest_nbrs, distpower=distpower, optimize_flag=OPTIMIZE_FLAG)
+                predicted_cal_df = calibrate(val_filename=val_filename_thisfold, ytest_filename=ytest_filename_thisfold, savefilename=ytest_cal_filename_thisfold, verbose=1, valattrib_filename=None, ytestattrib_filename=ytestattrib_filename_thisfold, numnn=num_nearest_nbrs, distpower=distpower, optimize_flag=OPTIMIZE_FLAG)
+                y_test_preds_cal_median.extend(predicted_cal_df['pred_mean_cal'].values)
+                y_test_preds_cal_lower.extend(predicted_cal_df['pred_lower_cal'].values)
+                y_test_preds_cal_upper.extend(predicted_cal_df['pred_upper_cal'].values)
+                '''
                 b_to_use = result.item()#result[0]
                 w_to_use = 1#result[1]
                 y_test_pred_upper_cal = inv_cdf(b=b_to_use, w=w_to_use, p=0.841, mean_val=y_val_preds_mean, std_val=y_val_preds_std, std_epis_val=y_val_preds_std_epis, orig_val=y_val, mean_test=y_test_pred_mean, std_test=y_test_pred_std, std_epis_test=y_test_pred_std_epis)[int(CAL_COMB_FLAG)]
@@ -656,6 +678,7 @@ for label_str in [0]:
                 y_test_preds_cal_median.extend(y_test_pred_median_cal)
                 y_test_preds_cal_lower.extend(y_test_pred_lower_cal)
                 y_test_preds_cal_upper.extend(y_test_pred_upper_cal)
+                '''
         #convert lists to arrays and reshape
         y_tests = np.asarray(y_tests).reshape(-1,1)
         y_test_preds_std_epis = np.asarray(y_test_preds_std_epis).reshape(-1,1)
@@ -980,7 +1003,7 @@ for train_val_idx, test_idx in custom_cv(label1, n_folds=n_folds_test):
     X_train_val = X.iloc[train_val_idx].reset_index(drop='index')
     y_train_val = label1[train_val_idx]
     #
-    y_val_preds_mean, y_val_preds_std, y_val_preds_std_epis, y_val, final_model, max_samples_best = ngb_nobs_cv(estimator=ngb_pipeline(), x_df=X_train_val, y=y_train_val, x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise)
+    y_val_preds_mean, y_val_preds_std, y_val_preds_std_epis, y_val, final_model, max_samples_best = ngb_nobs_cv(estimator=ngb_pipeline(), x_df=X_train_val, y=y_train_val, x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise, n_folds=n_folds_val)
     y_test_pred_mean, y_test_pred_std, y_test_pred_std_epis, y_test = simple_train_predict(estimator=final_model, x_df=np.log10(X), y=label1, cv_to_use=[(train_val_idx, test_idx)], x_transformer=x_transformer, y_transformer=y_transformer, x_noise=x_noise, save_boot=False, max_samples_best=max_samples_best)
     #
     y_test_preds_mean.extend(y_test_pred_mean)

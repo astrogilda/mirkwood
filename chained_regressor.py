@@ -14,7 +14,7 @@ import seaborn as sns
 
 from sklearn.preprocessing import PowerTransformer as pt, MinMaxScaler as mms, StandardScaler as ss, RobustScaler as rs
 
-import regressor_mod_trees`
+import regressor_mod_trees
 import re
 
 from pprint import pprint

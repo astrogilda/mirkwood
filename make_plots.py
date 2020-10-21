@@ -68,6 +68,8 @@ label_is_mirk_uncal = interval_sharpness(gilda_file.iloc[:,0].values, (gilda_fil
 
 model_names = ['Mirkwood', 'Mirkwood,\nuncalibrated', 'Non-\nparametric']
 clrs = ['blue', 'green', 'orange']
+
+
 plt.close('all')
 fig, ax = plt.subplots(figsize=(15,5)) # Create matplotlib figure
 #ax = fig.add_subplot(111) # Create matplotlib axes
@@ -115,8 +117,8 @@ x, y, k = joint_file["true"], joint_file["pred_mean"], joint_file["flag"]
 g = sns.JointGrid(height=15, space=0)
 lp = sns.lineplot(x=gilda_file_just_means.true, y=gilda_file_just_means.true, lw=4, ax=g.ax_joint, color='white')
 lp.lines[0].set_linestyle("--")
-sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=3)
-sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=3)
+sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=5)
+sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=5)
 g.ax_joint.set_ylim(bottom=g.ax_joint.get_xlim()[0], top=g.ax_joint.get_xlim()[1])
 
 sns.kdeplot(x=gilda_file_just_means.true, color="orange", legend=False, lw=4, 
@@ -161,6 +163,9 @@ legend_elements = [label_patch1, label_patch2]
 L1 = g.ax_joint.legend(handles=legend_elements[0:1], loc=[0, 0.75], fontsize=30, fancybox=True, framealpha=0.7)
 g.ax_joint.add_artist(L1)
 g.ax_joint.legend(handles=legend_elements[1:], loc=[0.38, 0.75], fontsize=30)
+
+#g.ax_marg_x.set_axis_off()
+#g.ax_marg_y.set_axis_off()
 
 plt.savefig(label_list[label_str]+'_snr=%d'%snr+'.png', bbox_inches='tight', pad_inches=0.1, dpi=300, facecolor=black_facecolor, edgecolor=black_facecolor)
 plt.savefig(label_list[label_str]+'_snr=%d'%snr+'.eps', bbox_inches='tight', pad_inches=0.1, dpi=300, facecolor=black_facecolor, edgecolor=black_facecolor)
@@ -246,8 +251,8 @@ x, y, k = joint_file["true"], joint_file["pred_mean"], joint_file["flag"]
 g = sns.JointGrid(height=15, space=0)
 lp = sns.lineplot(x=gilda_file_just_means.true, y=gilda_file_just_means.true, lw=4, ax=g.ax_joint, color='white')
 lp.lines[0].set_linestyle("--")
-sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=3)
-sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=3)
+sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=5)
+sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=5)
 g.ax_joint.set_ylim(bottom=g.ax_joint.get_xlim()[0], top=g.ax_joint.get_xlim()[1])
 
 sns.kdeplot(x=gilda_file_just_means.true, color="orange", legend=False, lw=4, 
@@ -294,7 +299,7 @@ L1 = g.ax_joint.legend(handles=legend_elements[0:1], loc=[0, 0.75], fontsize=30,
 g.ax_joint.add_artist(L1)
 g.ax_joint.legend(handles=legend_elements[1:], loc=[0.38, 0.75], fontsize=30)
 
-g.ax_joint.set_facecolor(black_facecolor)
+#g.ax_joint.set_facecolor(black_facecolor)
 
 plt.savefig(label_list[label_str]+'_snr=%d'%snr+'.png', bbox_inches='tight', pad_inches=0.1, dpi=300, facecolor=black_facecolor, edgecolor=black_facecolor)
 plt.savefig(label_list[label_str]+'_snr=%d'%snr+'.eps', bbox_inches='tight', pad_inches=0.1, dpi=300, facecolor=black_facecolor, edgecolor=black_facecolor)
@@ -379,8 +384,8 @@ x, y, k = joint_file["true"], joint_file["pred_mean"], joint_file["flag"]
 g = sns.JointGrid(height=15, space=0)
 lp = sns.lineplot(x=gilda_file_just_means.true, y=gilda_file_just_means.true, lw=4, ax=g.ax_joint, color='white')
 lp.lines[0].set_linestyle("--")
-sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=4, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=3)
-sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=4, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=3)
+sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=4, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=5)
+sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=4, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=5)
 g.ax_joint.set_ylim(bottom=g.ax_joint.get_xlim()[0], top=g.ax_joint.get_xlim()[1])
 
 sns.kdeplot(x=gilda_file_just_means.true, color="orange", legend=False, lw=4, 
@@ -394,6 +399,7 @@ sns.kdeplot(y=lower_file_just_means.pred_mean, color="blue", legend=False, lw=4,
 
 g.ax_joint.set_xlabel(r'$\log$ (Z$^{\star}_{\rm{true}}$ / Z$_{\odot}$)', ha='center', size=35)
 g.ax_joint.set_ylabel(r'$\log$ (Z$^{\star}_{\rm{model}}$ / Z$_{\odot}$)', va='center', rotation='vertical', size=35, labelpad=30)
+g.ax_joint.grid(False)
 g.ax_marg_x.grid(False)
 g.ax_marg_y.grid(False)
 
@@ -497,23 +503,36 @@ gilda_file_just_means = pd.DataFrame()
 gilda_file_just_means['true'] = gilda_file['true'].copy()
 gilda_file_just_means['pred_mean'] = gilda_file['pred_mean_cal'].copy()
 gilda_file_just_means = np.log10(gilda_file_just_means+1)
-
 gilda_file_just_means['flag']='mirkwood'
+
+idx = gilda_file_just_means.true < 0.75
+gilda_file_just_means = gilda_file_just_means[idx]
+gilda_file_just_means[idx].reset_index(inplace=True)
+
 lower_file_just_means = pd.DataFrame()
 lower_file_just_means['true'] = lower_file['true_sfr'].copy()
 lower_file_just_means['pred_mean'] = lower_file['est_sfr_50'].copy()
 lower_file_just_means = np.log10(lower_file_just_means+1)
-
 lower_file_just_means['flag']='Non-Parametric'
+
+idx = lower_file_just_means.true < 0.75
+lower_file_just_means = lower_file_just_means[idx]
+lower_file_just_means[idx].reset_index(inplace=True)
+
+
 joint_file=pd.concat([gilda_file_just_means, lower_file_just_means]).reset_index(drop=True)
+
+idx = joint_file.true < 0.75
+joint_file = joint_file[idx]
+joint_file[idx].reset_index(inplace=True)
 
 plt.close('all')
 x, y, k = joint_file["true"], joint_file["pred_mean"], joint_file["flag"]
 g = sns.JointGrid(height=15, space=0)
 lp = sns.lineplot(x=gilda_file_just_means.true, y=gilda_file_just_means.true, lw=4, ax=g.ax_joint, color='white')
 lp.lines[0].set_linestyle("--")
-sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=3)
-sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=3)
+sns.kdeplot(x=gilda_file_just_means.true, y=gilda_file_just_means.pred_mean, cmap="Oranges", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles="--", label='mirkwood', linewidths=5)
+sns.kdeplot(x=lower_file_just_means.true, y=lower_file_just_means.pred_mean, cmap="Blues", shade=False, thresh=0.1, levels=5, ax=g.ax_joint, linestyles=":", label='Non-Parametric', linewidths=5)
 g.ax_joint.set_ylim(bottom=g.ax_joint.get_xlim()[0], top=g.ax_joint.get_xlim()[1])
 
 sns.kdeplot(x=gilda_file_just_means.true, color="orange", legend=False, lw=4, 
@@ -527,6 +546,7 @@ sns.kdeplot(y=lower_file_just_means.pred_mean, color="blue", legend=False, lw=4,
 
 g.ax_joint.set_xlabel(r'$\log$ (SFR$_{\rm{100, true}}$)', ha='center', size=35)
 g.ax_joint.set_ylabel(r'$\log$ (SFR$_{\rm{100, model}}$)', va='center', rotation='vertical', size=35, labelpad=30)
+g.ax_joint.grid(False)
 g.ax_marg_x.grid(False)
 g.ax_marg_y.grid(False)
 
