@@ -152,6 +152,14 @@ tng_seds = 'tng_ml_SEDs_z0.0.pkl'
 tng_seds_fir = 'tng_ml_SEDs_z0.0_alma_scuba.pkl'
 tng_props = 'tng_ml_props_z0.0.pkl'
 
+simba_seds_z2 = 'simba_ml_SEDs_z2.pkl'
+simba_props_z2 = 'simba_ml_props_z2.pkl'
+
+eagle_seds_z2 = 'eagle_ml_SEDs_z2.pkl'
+eagle_props_z2 = 'eagle_ml_props_z2.pkl'
+
+tng_seds_z2 = 'tng_ml_SEDs_z2.pkl'
+tng_props_z2 = 'tng_ml_props_z2.pkl'
 
 ### EAGLE ###
 X_eagle = pd.concat((pd.read_pickle(eagle_seds1), pd.read_pickle(eagle_seds2)), axis=0)
@@ -170,8 +178,6 @@ X_eagle.drop(columns=['index', 'ID'], inplace=True)
 X_eagle_fir = X_eagle_fir.loc[common_idx0, :].copy()
 X_eagle_fir.reset_index(inplace=True)
 X_eagle_fir.drop(columns=['index', 'ID'], inplace=True)
-
-
 
 titles = X_eagle['Filters'][0]
 titles_fir = X_eagle_fir['Filters'][0]
@@ -231,6 +237,56 @@ logmass_eagle[logmass_eagle<EPS] = 0
 logsfr_eagle[logsfr_eagle<EPS] = 0
 #logmet_eagle[logmet_eagle<EPS] = 0
 logdustmass_eagle[logdustmass_eagle<EPS] = 0
+
+###########################
+### z = 2 ####
+
+X_eagle2 = pd.read_pickle(eagle_seds_z2)
+y_eagle2 = pd.read_pickle(eagle_props_z2)
+
+common_ids, common_idx0, common_idx1 = np.intersect1d(X_eagle2['ID'].values, y_eagle2['ID'].values, assume_unique=True, return_indices=True)
+y_eagle2 = y_eagle2.loc[common_idx1,:].copy()
+X_eagle2 = X_eagle2.loc[common_idx0, :].copy()
+X_eagle2.reset_index(inplace=True)
+X_eagle2.drop(columns=['index', 'ID'], inplace=True)
+
+fluxes_eagle = []
+for i in range(X_eagle2.shape[0]):
+    fluxes_eagle.append(X_eagle2['Flux [Jy]'][i])
+
+fluxes_eagle = np.asarray(fluxes_eagle)
+X_eagle2 = pd.DataFrame(fluxes_eagle, columns=titles+titles_fir)
+
+y_eagle_id = y_eagle2.pop('ID')
+
+for prop in list(y_eagle2):
+    q = y_eagle2[prop].values.copy() #it's a numpy array of singular lists
+    w = []
+    for i in range(X_eagle2.shape[0]):
+        try:
+            if len(q[i])>1:
+                print('whoohoo')
+                w.append(0.)
+            elif len(q[i])==1:
+                w.append(q[i][0].item())
+        except TypeError:
+            w.append(q[i])
+    y_eagle2[prop] = np.asarray(w)   
+
+
+y_eagle2['metallicity'] = 10**y_eagle2['metallicity']
+
+logmass_eagle2 = np.log10(y_eagle2['stellar_mass'].values)
+logsfr_eagle2 = np.log10(1+y_eagle2['sfr'].values)
+logmet_eagle2 = np.log10(y_eagle2['metallicity']).values
+logdustmass_eagle2 = np.log10(1+y_eagle2['dust_mass']).values
+
+logmass_eagle2[logmass_eagle2<EPS] = 0
+logsfr_eagle2[logsfr_eagle2<EPS] = 0
+#logmet_eagle2[logmet_eagle2<EPS] = 0
+logdustmass_eagle2[logdustmass_eagle2<EPS] = 0
+
+###########################
 
 #########################################################
 ### SIMBA ###############################################
@@ -313,6 +369,56 @@ logsfr_simba[logsfr_simba<EPS] = 0
 #logmet_simba[logmet_simba<EPS] = 0
 logdustmass_simba[logdustmass_simba<EPS] = 0
 
+
+###########################
+### z = 2 ####
+
+X_simba2 = pd.read_pickle(simba_seds_z2)
+y_simba2 = pd.read_pickle(simba_props_z2)
+
+common_ids, common_idx0, common_idx1 = np.intersect1d(X_simba2['ID'].values, y_simba2['ID'].values, assume_unique=True, return_indices=True)
+y_simba2 = y_simba2.loc[common_idx1,:].copy()
+X_simba2 = X_simba2.loc[common_idx0, :].copy()
+X_simba2.reset_index(inplace=True)
+X_simba2.drop(columns=['index', 'ID'], inplace=True)
+
+fluxes_simba = []
+for i in range(X_simba2.shape[0]):
+    fluxes_simba.append(X_simba2['Flux [Jy]'][i])
+
+fluxes_simba = np.asarray(fluxes_simba)
+X_simba2 = pd.DataFrame(fluxes_simba, columns=titles+titles_fir)
+
+y_simba_id = y_simba2.pop('ID')
+
+for prop in list(y_simba2):
+    q = y_simba2[prop].values.copy() #it's a numpy array of singular lists
+    w = []
+    for i in range(X_simba2.shape[0]):
+        try:
+            if len(q[i])>1:
+                print('whoohoo')
+                w.append(0.)
+            elif len(q[i])==1:
+                w.append(q[i][0].item())
+        except TypeError:
+            w.append(q[i])
+    y_simba2[prop] = np.asarray(w)   
+
+
+y_simba2['metallicity'] = 10**y_simba2['metallicity']
+
+logmass_simba2 = np.log10(y_simba2['stellar_mass'].values)
+logsfr_simba2 = np.log10(1+y_simba2['sfr'].values)
+logmet_simba2 = np.log10(y_simba2['metallicity']).values
+logdustmass_simba2 = np.log10(1+y_simba2['dust_mass']).values
+
+logmass_simba2[logmass_simba2<EPS] = 0
+logsfr_simba2[logsfr_simba2<EPS] = 0
+#logmet_simba2[logmet_simba2<EPS] = 0
+logdustmass_simba2[logdustmass_simba2<EPS] = 0
+
+###########################
 
 #########################################################
 ### TNG ###############################################
@@ -408,10 +514,69 @@ logsfr_tng[logsfr_tng<EPS] = 0
 logdustmass_tng[logdustmass_tng<EPS] = 0
 
 
+###########################
+### z = 2 ####
+
+X_tng2 = pd.read_pickle(tng_seds_z2)
+y_tng2 = pd.read_pickle(tng_props_z2)
+
+common_ids, common_idx0, common_idx1 = np.intersect1d(X_tng2['ID'].values, y_tng2['ID'].values, assume_unique=True, return_indices=True)
+y_tng2 = y_tng2.loc[common_idx1,:].copy()
+X_tng2 = X_tng2.loc[common_idx0, :].copy()
+X_tng2.reset_index(inplace=True)
+X_tng2.drop(columns=['index', 'ID'], inplace=True)
+
+fluxes_tng = []
+for i in range(X_tng2.shape[0]):
+    fluxes_tng.append(X_tng2['Flux [Jy]'][i])
+
+fluxes_tng = np.asarray(fluxes_tng)
+X_tng2 = pd.DataFrame(fluxes_tng, columns=titles + titles_fir)
+
+y_tng_id = y_tng2.pop('ID')
+
+for prop in list(y_tng2):
+    q = y_tng2[prop].values.copy() #it's a numpy array of singular lists
+    w = []
+    for i in range(X_tng2.shape[0]):
+        try:
+            if len(q[i])>1:
+                print('whoohoo')
+                w.append(0.)
+            elif len(q[i])==1:
+                w.append(q[i][0].item())
+        except TypeError:
+            w.append(q[i])
+    y_tng2[prop] = np.asarray(w)   
+
+
+y_tng2['metallicity'] = 10**y_tng2['metallicity']
+
+logmass_tng2 = np.log10(y_tng2['stellar_mass'].values)
+logsfr_tng2 = np.log10(1+y_tng2['sfr'].values)
+logmet_tng2 = np.log10(y_tng2['metallicity']).values
+logdustmass_tng2 = np.log10(1+y_tng2['dust_mass']).values
+
+logmass_tng2[logmass_tng2<EPS] = 0
+logsfr_tng2[logsfr_tng2<EPS] = 0
+#logmet_tng2[logmet_tng2<EPS] = 0
+logdustmass_tng2[logdustmass_tng2<EPS] = 0
+
+
+###########################
+
 
 ##################################################################
 ############### combine SIMBA and EAGLE and TNG ##################
-dataset_dict = {'simba': (X_simba, y_simba), 'eagle': (X_eagle, y_eagle), 'tng': (X_tng, y_tng)}
+y_simba['z'] = 0.
+y_simba2['z'] = 2.
+y_eagle['z'] = 0.
+y_eagle2['z'] = 2.
+y_tng['z'] = 0.
+y_tng2['z'] = 2.
+mulfac = 1e15
+
+dataset_dict = {'simba': (X_simba, y_simba), 'eagle': (X_eagle, y_eagle), 'tng': (X_tng, y_tng), 'simba2': (X_simba2, y_simba2), 'eagle2': (X_eagle2, y_eagle2), 'tng2': (X_tng2, y_tng2)}
 
 def get_data(train_data, dataset_dict=dataset_dict):
     X = pd.DataFrame()
@@ -420,17 +585,19 @@ def get_data(train_data, dataset_dict=dataset_dict):
         X = pd.concat((X, dataset_dict[i][0]), axis=0).reset_index().drop('index', axis=1)
         y = pd.concat((y, dataset_dict[i][1]), axis=0).reset_index().drop('index', axis=1)
     #
+    redshift = y['z'].values
     logmass = np.log10(y['stellar_mass'].values)
-    logsfr = np.log10(1+y['sfr'].values)
-    logmet = np.log10(y['metallicity']).values
     logdustmass = np.log10(1+y['dust_mass']).values
+    logmet = np.log10(y['metallicity']).values
+    logsfr = np.log10(1+y['sfr'].values)
     #
     logmass[logmass<EPS] = 0
     logsfr[logsfr<EPS] = 0
     #logmet[logmet<EPS] = 0
     logdustmass[logdustmass<EPS] = 0
-    return X, (logmass, logdustmass, logmet, logsfr)
+    return X*mulfac, (redshift, logmass, logdustmass, logmet, logsfr)
 
+train_data = ['simba', 'simba2', 'eagle', 'eagle2', 'tng', 'tng2']
 q=get_data(train_data)
 
 '''
