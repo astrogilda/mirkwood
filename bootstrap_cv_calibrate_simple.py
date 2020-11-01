@@ -518,7 +518,7 @@ label_list=['Redshift', 'Mass', 'Dust Mass', 'Metallicity', 'Star Formation Rate
 #              'Dust Mass':logdustmass,
 #              'Metallicity':logmet,
 #              'Star Formation Rate':logsfr}
-label_rev_func = {'Mass': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=20)),
+label_rev_func = {'Mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
                   'Dust Mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
                   'Metallicity': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
                   'Star Formation Rate': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
@@ -568,8 +568,8 @@ OPTIMIZE_FLAG = False
 ##########################################
 ##########################################
 time_start = time.time()
-for x_noise in [.2,.1,.05]:
-    for label_str in [2,3,4]:
+for x_noise in [.2]:
+    for label_str in [0,1,2,3,4]:
         # calibrated
         y_test_preds_cal_lower = list()
         y_test_preds_cal_upper = list()
@@ -584,6 +584,9 @@ for x_noise in [.2,.1,.05]:
         #### shap ####
         y_test_shaps_mean = list()
         y_test_shaps_std = list()
+        #### input fluxes ###
+        x_trains = list()
+        x_tests = list()
         #### Calibration coeffs ###
         best_b = list()
         best_w = list()
@@ -675,6 +678,8 @@ for x_noise in [.2,.1,.05]:
             y_test_preds_upper.extend(y_test_pred_upper)
             y_test_shaps_mean.extend(y_test_shap_mean)
             y_test_shaps_std.extend(y_test_shap_std)
+            x_trains.extend(x_df.loc[train_val_idx,list(x_df)[:-1]].copy().values)
+            x_tests.extend(x_df.loc[test_idx,list(x_df)[:-1]].copy().values)
             #### Calibration #################################
             if CALIBRATE_FLAG:
                 #'''
@@ -725,6 +730,8 @@ for x_noise in [.2,.1,.05]:
         y_test_preds_upper = np.asarray(y_test_preds_upper).reshape(-1,1)
         y_test_shaps_mean = np.asarray(y_test_shaps_mean)
         y_test_shaps_std = np.asarray(y_test_shaps_std)
+        x_trains = np.asarray(x_trains)
+        x_tests = np.asarray(x_tests)
         #       
         if CALIBRATE_FLAG:
             y_test_preds_cal_median = np.asarray(y_test_preds_cal_median).reshape(-1,1)
@@ -733,11 +740,17 @@ for x_noise in [.2,.1,.05]:
         ######################
         ### saving results ###
         a = pd.DataFrame(np.hstack((y_tests, y_test_preds_mean, y_test_preds_lower, y_test_preds_upper, y_test_preds_std_epis)), columns=['true', 'pred_mean', 'pred_lower', 'pred_upper', 'pred_std_epis'])
-        a.to_csv('uncal_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_NATGRADFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(NATGRAD_FLAG), str(CHAIN_FLAG))+timestr+'.csv')
+        a.to_csv('uncal_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(CHAIN_FLAG))+timestr+'.csv')
         b = pd.DataFrame(y_test_shaps_mean, columns=list(x_df)[:-1])
-        b.to_csv('shapmea_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_NATGRADFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(NATGRAD_FLAG), str(CHAIN_FLAG))+timestr+'.csv')
+        b.to_csv('shapmea_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(CHAIN_FLAG))+timestr+'.csv')
         c = pd.DataFrame(y_test_shaps_std, columns=list(x_df)[:-1])
-        c.to_csv('shapstd_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_NATGRADFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(NATGRAD_FLAG), str(CHAIN_FLAG))+timestr+'.csv')
+        c.to_csv('shapstd_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(CHAIN_FLAG))+timestr+'.csv')
+        xtrn = pd.DataFrame(x_trains)#, columns=list(X))
+        #xtrn.drop_duplicates(inplace=True, ignore_index=True)
+        xtrn.to_csv('xtrain_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(CHAIN_FLAG))+timestr+'.csv')
+        xtst = pd.DataFrame(x_tests)#, columns=list(X))
+        #xtst.drop_duplicates(inplace=True, ignore_index=True)
+        xtst.to_csv('xtest_label=%s_TRAININGDATA=%s_TESTINGDATA=%s_SNR=%d_NUMBS=%d_WEIGHTFLAG=%s_nfoldsval=%d_nfoldstest=%d_xtrans=%s_ytrans=%s_MEDIANFLAG=%s_CHAINFLAG=%s_'%(label_list[label_str], train_data, test_data, int(snr), NUM_BS, str(WEIGHT_FLAG), int(n_folds_val), int(n_folds_test), str(x_transformer is not None), str(y_transformer is not None), str(MEDIANFLAG), str(CHAIN_FLAG))+timestr+'.csv')
         print('run time = %.1f minutes'%((time.time() - time_start)/60))
         if CALIBRATE_FLAG:
             d = pd.DataFrame(np.hstack((y_tests, y_test_preds_cal_median, y_test_preds_cal_lower, y_test_preds_cal_upper, y_test_preds_std_epis)), columns=['true', 'pred_mean_cal', 'pred_lower_cal', 'pred_upper_cal', 'pred_std_epis'])
@@ -748,12 +761,16 @@ for x_noise in [.2,.1,.05]:
 
 # SNR 5
 snr = 5
-timestr = '20200915'
-### get Prospector results from Sidney's files #############
+### get Prospector results from Sidney's files #############\
 simba_prosp = pd.read_pickle('simba_snr%d.pkl'%snr)
 eagle_prosp = pd.read_pickle('eagle_snr%d.pkl'%snr)
 tng_prosp = pd.read_pickle('tng_snr%d.pkl'%snr)
-combined_prosp = pd.concat((simba_prosp, eagle_prosp, tng_prosp), axis=0).reset_index(drop=True)
+simba_prosp_z2 = pd.read_pickle('simba_snr%d_z2.pkl'%snr)
+simba_prosp['redshift']=0.
+eagle_prosp['redshift']=0.
+tng_prosp['redshift']=0.
+simba_prosp_z2['redshift']=2.
+combined_prosp = pd.concat((simba_prosp, eagle_prosp, tng_prosp, simba_prosp_z2), axis=0).reset_index(drop=True)
 
 
 
