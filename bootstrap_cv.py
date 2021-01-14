@@ -30,6 +30,68 @@ from astropy.stats import mad_std, median_absolute_deviation as mad
 import shap
 from scipy import optimize
 from metrics import *
+from sedpy.observate import load_filters
+
+X_simba, y_simba = pd.read_pickle('X_simba.pkl'), pd.read_pickle('y_simba.pkl')
+X_eagle, y_eagle = pd.read_pickle('X_eagle.pkl'), pd.read_pickle('y_eagle.pkl')
+X_tng, y_tng = pd.read_pickle('X_tng.pkl'), pd.read_pickle('y_tng.pkl')
+
+dataset_dict = {'simba': (X_simba, y_simba), 'eagle': (X_eagle, y_eagle), 'tng': (X_tng, y_tng)}
+
+def get_data(train_data, dataset_dict=dataset_dict):
+    X = pd.DataFrame()
+    y = pd.DataFrame()
+    for i in train_data:
+        X = pd.concat((X, dataset_dict[i][0]), axis=0).reset_index().drop('index', axis=1)
+        y = pd.concat((y, dataset_dict[i][1]), axis=0).reset_index().drop('index', axis=1)
+    #
+    #redshift = y['z'].values
+    logmass = np.log10(y['stellar_mass'].values)
+    logdustmass = np.log10(1+y['dust_mass']).values
+    logmet = np.log10(y['metallicity']).values
+    logsfr = np.log10(1+y['sfr'].values)
+    #
+    logmass[logmass<EPS] = 0
+    logsfr[logsfr<EPS] = 0
+    #logmet[logmet<EPS] = 0
+    logdustmass[logdustmass<EPS] = 0
+    return X*mulfac, (logmass, logdustmass, logmet, logsfr)
+
+X, y = get_data(['simba'])
+filters = load_filters(list(X), directory='./sedpy/data/filters')
+filt_mean_wave = dict()
+for filt in filters:
+    filt_mean_wave[filt.name]= str(round(filt.wave_mean/10000,2))
+
+central_wav_list = [filt_mean_wave.get(i) for i in list(X)]
+
+
+def custom_cv(y, n_folds=10):
+    np.random.seed(10)
+    to_return = []
+    folds =  [[] for i in range(n_folds)]
+    #
+    y_idx = np.argsort(y)
+    n_bins = np.ceil(len(y)/n_folds)
+    #
+    q = chunkify(y_idx, n_bins)
+    #
+    for sub_arr in q:
+        sub_arr_shuffled = np.random.choice(sub_arr, size=len(sub_arr), replace=False)
+        for i in range(len(sub_arr)):
+            folds[i].append(sub_arr_shuffled[i])
+    #
+    for i in range(n_folds):
+        q = list(np.arange(n_folds))
+        test_idx_meta = q.pop(i)
+        train_idx_meta = q
+        train_idx = []
+        test_idx = folds[i]
+        for j in train_idx_meta:
+            train_idx.extend(folds[j])
+        to_return.append((train_idx, test_idx))
+    return to_return
+
 
 np.random.seed(1)
 
