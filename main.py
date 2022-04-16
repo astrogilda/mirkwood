@@ -65,6 +65,14 @@ for filt in filters:
 
 central_wav_list = [filt_mean_wave.get(i) for i in list(X)]
 
+def chunkify(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+    return out
 
 def custom_cv(y, n_folds=10):
     np.random.seed(10)
