@@ -1,8 +1,10 @@
-from ngboost.distns import RegressionDistn
-from ngboost.scores import LogScore, CRPScore
-import scipy as sp
+"""The NGBoost Normal distribution and scores"""
 import numpy as np
+import scipy as sp
 from scipy.stats import norm as dist
+
+from ngboost.distns.distn import RegressionDistn
+from ngboost.scores import CRPScore, LogScore
 
 
 class NormalLogScore(LogScore):
@@ -12,8 +14,7 @@ class NormalLogScore(LogScore):
     def d_score(self, Y):
         D = np.zeros((len(Y), 2))
         D[:, 0] = (self.loc - Y) / self.var
-        # 09/15/2020: changed ** to np.float_power to avoid overflow errors
-        D[:, 1] = 1 - np.float_power(self.loc - Y, 2) / self.var
+        D[:, 1] = 1 - ((self.loc - Y) ** 2) / self.var
         return D
 
     def metric(self):
@@ -55,7 +56,8 @@ class Normal(RegressionDistn):
     """
     Implements the normal distribution for NGBoost.
 
-    The normal distribution has two parameters, loc and scale, which are the mean and standard deviation, respectively.
+    The normal distribution has two parameters, loc and scale, which are
+    the mean and standard deviation, respectively.
     This distribution has both LogScore and CRPScore implemented for it.
     """
 
@@ -65,12 +67,12 @@ class Normal(RegressionDistn):
     def __init__(self, params):
         super().__init__(params)
         self.loc = params[0]
-        #Sankalp: adding the clipping line on 10/16/2020.
+        # Sankalp: adding the clipping line on 10/16/2020.
         q = np.clip(params[1], a_min=-1e1, a_max=1e1)
         self.scale = np.exp(q)
-        #Sankalp: adding the clipping line on 10/16/2020.
-        self.scale = np.clip(self.scale, a_min=0, a_max=1e1)
-        self.var = np.float_power(self.scale,2)
+        # Sankalp: adding the clipping line on 10/16/2020.
+        self.scale = np.exp(params[1])
+        self.var = self.scale**2
         self.dist = dist(loc=self.loc, scale=self.scale)
 
     def fit(Y):
@@ -92,7 +94,7 @@ class Normal(RegressionDistn):
         return {"loc": self.loc, "scale": self.scale}
 
 
-### Fixed Variance Normal ###
+# ### Fixed Variance Normal ###
 class NormalFixedVarLogScore(LogScore):
     def score(self, Y):
         return -self.dist.logpdf(Y)
@@ -141,6 +143,7 @@ class NormalFixedVar(Normal):
     n_params = 1
     scores = [NormalFixedVarLogScore, NormalFixedVarCRPScore]
 
+    # pylint: disable=super-init-not-called
     def __init__(self, params):
         self.loc = params[0]
         self.var = np.ones_like(self.loc)
@@ -149,5 +152,5 @@ class NormalFixedVar(Normal):
         self.dist = dist(loc=self.loc, scale=self.scale)
 
     def fit(Y):
-        m, s = sp.stats.norm.fit(Y)
+        m, _ = sp.stats.norm.fit(Y)
         return m

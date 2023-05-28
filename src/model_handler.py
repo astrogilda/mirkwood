@@ -58,6 +58,12 @@ class ModelHandler(BaseModel):
             raise ValueError('Invalid transformer or estimator')
         return v
 
+    @validator('y_weights')
+    def validate_y_weights_shape(cls, v, values):
+        if v is not None and v.shape != values['y'].shape:
+            raise ValueError("y and y_weights must have the same shape")
+        return v
+
     @validator('y_transformer', pre=True)
     def make_list(cls, v):
         if v is None:
@@ -111,6 +117,9 @@ class ModelHandler(BaseModel):
                     verbose=self.model_config.verbose,
                     natural_gradient=self.model_config.natural_gradient,
                 )
+
+            if self.y_weights is None:
+                self.y_weights = np.ones_like(self.y)
 
             fitted_estimator = self.estimator.fit(
                 self.x, self.y, X_noise=self.x_noise, sample_weight=self.y_weights,

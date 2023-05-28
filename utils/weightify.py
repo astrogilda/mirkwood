@@ -224,13 +224,13 @@ class Weightify(BaseEstimator, TransformerMixin):
             Calculated weights.
         """
         # if all elements are equal, return an array of 1s
-        if len(set(y)) == 1:
+        if np.all(y == y[0]):
             return np.array([1]*len(y), dtype=y.dtype)
         else:
             kernel = gaussian_kde(y, bw_method=self.bw_method)
             kernel.set_bandwidth(bw_method=kernel.factor / self.n_bins)
             samples_per_bin = kernel(y)
-            return self.style_methods[self.style](self, samples_per_bin=samples_per_bin)
+            return self.style_methods[self.style](self, samples_per_bin=samples_per_bin).reshape(y.shape)
 
     def fit(self, y: np.ndarray, sub_size: int = 100_000, poly_order: int = 2) -> "Weightify":
         """
@@ -255,8 +255,8 @@ class Weightify(BaseEstimator, TransformerMixin):
         self : Weightify
             The fitted Weightify transformer.
         """
-        if y.ndim > 1:
-            raise NotImplementedError("Output y must be 1D (i.e. scalar)")
+        # if y.ndim > 1:
+        #    raise NotImplementedError("Output y must be 1D (i.e. scalar)")
 
         if sub_size < len(y):
             indices = np.random.permutation(len(y))[:sub_size]
@@ -267,6 +267,7 @@ class Weightify(BaseEstimator, TransformerMixin):
             transposed_y = np.vstack([y ** (poly_order - i)
                                       for i in range(poly_order + 1)]).T
             sample_weights = np.dot(transposed_y, poly_coeffs)
+            sample_weights = sample_weights.reshape(y.shape)
             del transposed_y
         else:
             sample_weights = self.calculate_weights(y)

@@ -1,3 +1,4 @@
+from sklearn.utils import check_X_y
 from typing import Callable, Optional, List, Tuple, Any
 from sklearn.base import TransformerMixin
 from multiprocessing import Pool
@@ -12,7 +13,6 @@ from pathlib import Path
 import os
 
 from pydantic import BaseModel, Field, validator, ValidationError, PrivateAttr
-from sklearn.base import TransformerMixin
 from pydantic.fields import ModelField
 
 from utils.custom_cv import CustomCV
@@ -28,14 +28,13 @@ class TrainPredictHandler(BaseModel):
     cross-validation, bootstrapping, and parallel computing.
     """
 
-    x: NDArrayFp32
-    y: NDArrayFp32
-    # cv: List[Tuple[List[int], List[int]]]
-    n_folds: int
+    x: NDArrayFp32  # = Field(..., min_items=100)
+    y: NDArrayFp32  # = Field(..., min_items=100)
+    n_folds: int = Field(default=5, ge=2, le=20)
     x_noise: Optional[NDArrayFp32] = None
     x_transformer: Optional[Any] = None
     y_transformer: Optional[Any] = None
-    frac_samples_best: float = Field(0.8, gt=0, lte=1)
+    frac_samples_best: float = Field(0.8, gt=0, le=1)
     weight_bins: int = 10
     reversifyfn: Optional[Callable[[NDArrayFp32], NDArrayFp32]] = None
     property_name: Optional[str] = None
@@ -56,6 +55,21 @@ class TrainPredictHandler(BaseModel):
     def validate_file_path(cls, value, values):
         if not values.get('fitting_mode') and not value.exists():
             raise FileNotFoundError(f"File at {value} not found.")
+        return value
+
+    @validator('x', 'y')
+    def validate_array_length(cls, v):
+        if len(v) < 100:
+            raise ValueError('The array should have at least 100 elements')
+        return v
+
+    @validator('x', 'y', pre=True)
+    def _check_same_length(cls, value: np.ndarray, values: dict, config, field: ModelField):
+        if 'x' in values and field.name == 'y':
+            x = values['x']
+            x, y = check_X_y(x, value)
+            values['x'] = x
+            return y
         return value
 
     @validator('x')
@@ -89,6 +103,7 @@ class TrainPredictHandler(BaseModel):
                 fitting_mode=self.fitting_mode,
                 file_path=self.file_path,
                 shap_file_path=self.shap_file_path,
+                x_noise=self.x_noise,
             )
         return self._model_handler
 
@@ -99,12 +114,6 @@ class TrainPredictHandler(BaseModel):
                 raise ValueError('Invalid transformer')
         elif v is not None and not isinstance(v, TransformerMixin):
             raise ValueError('Invalid transformer or estimator')
-        return v
-
-    @validator('n_folds')
-    def check_n_folds(cls, v):
-        if v < 1:
-            raise ValueError("n_folds cannot be 0 or 1")
         return v
 
     def train_predict(self) -> Tuple:
@@ -127,21 +136,17 @@ class TrainPredictHandler(BaseModel):
             print(f"val_idx: {val_idx}, type: {type(val_idx)}")
 
             # ensure train_idx and val_idx are integer arrays
-            if isinstance(train_idx, np.ndarray):
-                train_idx = train_idx.astype(int)
-            else:
-                train_idx = np.array(train_idx, dtype=int)
-
-            if isinstance(val_idx, np.ndarray):
-                val_idx = val_idx.astype(int)
-            else:
-                val_idx = np.array(val_idx, dtype=int)
+            train_idx = np.array(train_idx, dtype=int)
+            val_idx = np.array(val_idx, dtype=int)
 
             x_train, x_val = self.x[train_idx], self.x[val_idx]
             y_train, y_val = self.y[train_idx], self.y[val_idx]
 
-            y_train_weights = Weightify(n_bins=self.weight_bins).fit_transform(y=y_train) \
-                if self.weight_flag else np.ones(y_train.shape[0])
+            if self.weight_flag:
+                y_train_weights = Weightify(n_bins=self.weight_bins).fit_transform(
+                    y=y_train).reshape(-1, 1)
+            else:
+                y_train_weights = np.ones(y_train.shape)
 
             # setup the model handler with the right training data
             self.model_handler.x = x_train

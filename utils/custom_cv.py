@@ -24,6 +24,7 @@ def custom_cv(y: np.array, n_folds: int):
     cv_indices = np.empty((n_folds, n_samples), dtype=np.int64)
     cv_indices[:] = -1
     counts = np.zeros(n_folds, dtype=np.int64)
+    y = y.flatten()
     y_idx = np.argsort(y)
     n_bins = int(np.ceil(n_samples / n_folds))
     indices = np.array_split(y_idx, n_bins)
