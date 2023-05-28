@@ -205,7 +205,7 @@ def test_train_predict_with_transformers():
     # Create an instance of TrainPredictHandler with transformers
     transformer = StandardScaler()  # TransformerMixin()
     handler = TrainPredictHandler(
-        x=np.array([1, 2, 3]).reshape(-1, 1), y=np.array([4, 5, 6]).reshape(-1, 1), cv=[([0], [1])], x_transformer=transformer, y_transformer=transformer
+        x=np.array([1, 2, 3]).reshape(-1, 1), y=np.array([4, 5, 6]), n_folds=2, x_transformer=transformer, y_transformer=transformer
     )
 
     # Perform the train_predict operation

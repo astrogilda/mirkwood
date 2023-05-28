@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field, validator, ValidationError, PrivateAttr
 from sklearn.base import TransformerMixin
 from pydantic.fields import ModelField
 
+from utils.custom_cv import CustomCV
+
 # Suppress all warnings
 import warnings
 warnings.filterwarnings("ignore")
@@ -28,7 +30,8 @@ class TrainPredictHandler(BaseModel):
 
     x: NDArrayFp32
     y: NDArrayFp32
-    cv: List[Tuple[List[int], List[int]]]
+    # cv: List[Tuple[List[int], List[int]]]
+    n_folds: int
     x_noise: Optional[NDArrayFp32] = None
     x_transformer: Optional[Any] = None
     y_transformer: Optional[Any] = None
@@ -54,6 +57,23 @@ class TrainPredictHandler(BaseModel):
         if not values.get('fitting_mode') and not value.exists():
             raise FileNotFoundError(f"File at {value} not found.")
         return value
+
+    @validator('x')
+    def _check_x_dimension(cls, v: np.ndarray) -> np.ndarray:
+        """Validate if the input x array is two-dimensional"""
+        if len(v.shape) != 2:
+            raise ValueError("x should be 2-dimensional")
+        return v
+
+    @validator('y', pre=True)
+    def _check_y_dimension(cls, v: np.ndarray) -> np.ndarray:
+        """Validate if the input y array is one-dimensional or two-dimensional with second dimension 1"""
+        if len(v.shape) == 1:
+            v = v.reshape(-1, 1)
+        elif len(v.shape) != 2 or (len(v.shape) == 2 and v.shape[1] != 1):
+            raise ValueError(
+                "y should be 1-dimensional or 2-dimensional with second dimension 1")
+        return v
 
     @property
     def model_handler(self) -> ModelHandler:
@@ -81,10 +101,10 @@ class TrainPredictHandler(BaseModel):
             raise ValueError('Invalid transformer or estimator')
         return v
 
-    @validator('cv')
-    def check_cv(cls, v):
-        if not v:
-            raise ValueError("CV is empty")
+    @validator('n_folds')
+    def check_n_folds(cls, v):
+        if v < 1:
+            raise ValueError("n_folds cannot be 0 or 1")
         return v
 
     def train_predict(self) -> Tuple:
@@ -95,12 +115,14 @@ class TrainPredictHandler(BaseModel):
         yval_lists = [np.array([]) for _ in range(
             7)]  # 7 different metrics returned
 
-        for i, (train_idx, val_idx) in enumerate(self.cv):
+        cv = CustomCV(self.y, n_folds=self.n_folds).get_indices()
+
+        for i, (train_idx, val_idx) in enumerate(cv):
             # ensure the arrays/lists are not empty
             assert len(train_idx) > 0, "Training index array is empty"
             assert len(val_idx) > 0, "Validation index array is empty"
 
-            print('CV fold %d of %d' % (i+1, len(self.cv)))
+            print('CV fold %d of %d' % (i+1, len(cv)))
             print(f"train_idx: {train_idx}, type: {type(train_idx)}")
             print(f"val_idx: {val_idx}, type: {type(val_idx)}")
 

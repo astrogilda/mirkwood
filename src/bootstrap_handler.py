@@ -32,6 +32,30 @@ def numba_resample(idx: np.ndarray, n_samples: int) -> np.ndarray:
     return np.random.choice(idx, size=n_samples, replace=True)
 
 
+# Suppress all warnings
+warnings.filterwarnings("ignore")
+
+
+@jit(nopython=True)
+def numba_resample(idx: np.ndarray, n_samples: int) -> np.ndarray:
+    """
+    Fast resampling function using Numba.
+
+    Parameters
+    ----------
+    idx : np.ndarray
+        1D array of indices to be sampled.
+    n_samples : int
+        Number of samples to draw.
+
+    Returns
+    -------
+    np.ndarray
+        1D array of sampled indices.
+    """
+    return np.random.choice(idx, size=n_samples, replace=True)
+
+
 class BootstrapHandler(BaseModel):
     """
     BootstrapHandler class for resampling and reversing transformation and function application.
@@ -39,9 +63,9 @@ class BootstrapHandler(BaseModel):
     Attributes
     ----------
     x : np.ndarray
-        1D array of x data.
+        2D array of x data.
     y : np.ndarray
-        1D array of y data.
+        1D array of y data or 2D array with second dimension 1.
     frac_samples_best : float
         Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
     """
@@ -49,11 +73,21 @@ class BootstrapHandler(BaseModel):
     y: NDArrayFp32
     frac_samples_best: float = Field(1.0, gt=0, lte=1)
 
-    @validator('x', 'y')
-    def _check_dimensions(cls, v: np.ndarray) -> np.ndarray:
-        """Validate if the input arrays are one-dimensional"""
-        if len(v.shape) != 1:
-            raise ValueError("x and y should be 1-dimensional")
+    @validator('x')
+    def _check_x_dimension(cls, v: np.ndarray) -> np.ndarray:
+        """Validate if the input x array is two-dimensional"""
+        if len(v.shape) != 2:
+            raise ValueError("x should be 2-dimensional")
+        return v
+
+    @validator('y', pre=True)
+    def _check_y_dimension(cls, v: np.ndarray) -> np.ndarray:
+        """Validate if the input y array is one-dimensional or two-dimensional with second dimension 1"""
+        if len(v.shape) == 1:
+            v = v.reshape(-1, 1)
+        elif len(v.shape) != 2 or (len(v.shape) == 2 and v.shape[1] != 1):
+            raise ValueError(
+                "y should be 1-dimensional or 2-dimensional with second dimension 1")
         return v
 
     @validator('frac_samples_best')
