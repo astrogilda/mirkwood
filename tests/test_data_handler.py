@@ -1,11 +1,11 @@
-from hypothesis.strategies import sampled_from, lists
 import pytest
 from hypothesis import given, assume, settings
-from hypothesis.strategies import floats, lists, text
+from hypothesis.strategies import floats, lists, text, sampled_from
 from pydantic import ValidationError
 from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData
 import numpy as np
 from typing import List
+import pandas as pd
 
 
 @given(mulfac=floats(min_value=0.0, exclude_min=True))
@@ -66,6 +66,7 @@ non_empty_dataset_name_lists = lists(dataset_names, min_size=1)
 
 
 @given(train_data=non_empty_dataset_name_lists, mulfac=floats(min_value=0.0, exclude_min=True))
+@settings(deadline=None)
 def test_data_handler_get_data(train_data: List[TrainData], mulfac: float):
     """
     Test to check if the DataHandler can get data with specific names.
@@ -80,22 +81,106 @@ def test_data_handler_get_data(train_data: List[TrainData], mulfac: float):
             "IOError should not be raised when train_data contains specific values.")
 
 
+def test_data_handler_postprocess_y():
+    """
+    Test to check if the DataHandler postprocess_y method works correctly.
+    """
+    # Create a mock y array
+    dtype = np.dtype([
+        ('logmass', float),
+        ('logdustmass', float),
+        ('logmet', float),
+        ('logsfr', float),
+    ])
+    y_array = np.empty(2, dtype=dtype)
+    y_array['logmass'] = [1, 2]
+    y_array['logdustmass'] = [3, 4]
+    y_array['logmet'] = [5, 6]
+    y_array['logsfr'] = [7, 8]
+
+    # Create a DataHandler object
+    config = DataHandlerConfig(mulfac=1.0)
+    handler = DataHandler(config)
+
+    # Call the postprocess_y method
+    postprocessed_y = handler.postprocess_y(y_array)
+
+    # Expected output DataFrame
+    expected_output = pd.DataFrame({
+        'mass': [10, 100],
+        'dustmass': [999, 9999],
+        'met': [100000, 1000000],
+        'sfr': [9999999, 99999999],
+    })
+
+    # Change dtype of 'log' columns to match y_array dtype
+    for col in expected_output.columns:
+        expected_output[col] = expected_output[col].astype(
+            dtype["log"+col].type)
+
+    # Compare the postprocessed y DataFrame with the expected output DataFrame
+    pd.testing.assert_frame_equal(postprocessed_y, expected_output)
+
+
 def test_data_handler_preprocess_y():
     """
     Test to check if the DataHandler preprocess_y method works correctly.
     """
-    pass  # your implementation here
+    # Create a mock y DataFrame
+    y = pd.DataFrame({
+        'stellar_mass': [100, 1000],
+        'dust_mass': [100, 200],
+        'metallicity': [1, 2],
+        'sfr': [100, 200]
+    })
+
+    # Create a DataHandler object
+    config = DataHandlerConfig(mulfac=1.0)
+    handler = DataHandler(config)
+
+    # Call the preprocess_y method
+    preprocessed_y = handler.preprocess_y(y)
+
+    # Check the types and values
+    assert isinstance(preprocessed_y, np.ndarray)
+    assert np.allclose(preprocessed_y['logmass'], [2, 3])
+    assert np.allclose(preprocessed_y['logdustmass'], [
+                       np.log10(101), np.log10(201)])
+    assert np.allclose(preprocessed_y['logmet'], [0, np.log10(2)])
+    assert np.allclose(preprocessed_y['logsfr'], [
+                       np.log10(101), np.log10(201)])
 
 
 def test_data_set_is_loaded():
     """
     Test to check if the DataSet is_loaded property works correctly.
     """
-    pass  # your implementation here
+    # Create an unloaded DataSet
+    dataset = DataSet(name="eagle")
+    assert not dataset.is_loaded
+
+    # Load the DataSet
+    try:
+        dataset.load()
+        assert dataset.is_loaded
+    except Exception:
+        pytest.fail("Unexpected error when loading dataset.")
 
 
 def test_data_set_load():
     """
     Test to check if the DataSet load method works correctly.
     """
-    pass  # your implementation here
+    # Create an unloaded DataSet
+    dataset = DataSet(name="eagle")
+
+    # Try loading the DataSet
+    try:
+        dataset.load()
+        assert dataset.is_loaded
+    except Exception:
+        pytest.fail("Unexpected error when loading dataset.")
+
+    # Check that the loaded data are pandas DataFrame instances
+    assert isinstance(dataset.X, pd.DataFrame)
+    assert isinstance(dataset.y, pd.DataFrame)

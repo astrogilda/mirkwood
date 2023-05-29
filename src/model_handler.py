@@ -12,6 +12,7 @@ import shap
 from numba import njit, jit
 from ngboost import NGBRegressor
 from utils.custom_pydantic_classes import TransformerMixinField, NGBRegressorField
+from utils.reshape import reshape_array
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -93,7 +94,8 @@ class ModelHandler(BaseModel):
         if self.y_transformer is not None:
             for ytr in self.y_transformer:
                 ytr = ytr.fit(self.y.reshape(-1, 1))
-                self.y = ytr.transform(self.y.reshape(-1, 1)).reshape(-1,)
+                self.y = ytr.transform(self.y.reshape(-1, 1))
+                self.y = reshape_array(self.y)
                 list_of_fitted_transformers.append(ytr)
 
         return self.x, self.y, list_of_fitted_transformers
@@ -134,15 +136,6 @@ class ModelHandler(BaseModel):
 
         return self.estimator
 
-    @staticmethod
-    @jit(nopython=True)
-    def _reshape_array(array: np.ndarray) -> np.ndarray:
-        """
-        Reshape an array into a 1D array. Uses Numba for JIT compilation and
-        faster execution.
-        """
-        return array.reshape(-1,)
-
     def compute_prediction_bounds_and_shap_values(self, x_val: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Computes the prediction bounds and SHAP values of the model. If in fitting mode,
@@ -156,10 +149,10 @@ class ModelHandler(BaseModel):
                 raise ValueError("Model is not fitted.")
 
         y_pred = self.estimator.pred_dist(x_val)
-        y_pred_mean = self._reshape_array(y_pred.loc)
-        y_pred_std = self._reshape_array(y_pred.scale)
-        y_pred_upper = self._reshape_array(y_pred_mean + y_pred_std)
-        y_pred_lower = self._reshape_array(y_pred_mean - y_pred_std)
+        y_pred_mean = reshape_array(y_pred.loc)
+        y_pred_std = reshape_array(y_pred.scale)
+        y_pred_upper = reshape_array(y_pred_mean + y_pred_std)
+        y_pred_lower = reshape_array(y_pred_mean - y_pred_std)
 
         with catch_warnings():
             simplefilter("ignore")

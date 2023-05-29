@@ -7,10 +7,6 @@ from pydantic import BaseModel, Field, validator, parse_obj_as
 
 from enum import Enum
 
-# Suppress all warnings
-import warnings
-warnings.filterwarnings("ignore")
-
 
 class TrainData(str, Enum):
     EAGLE = "eagle"
@@ -71,10 +67,13 @@ class DataSet(BaseModel):
             If an error occurs while loading the data.
         """
         if not self.is_loaded:
-            path = Path('Simulations') / self.name
+
+            path = Path('Simulations').joinpath(self.name)
+
             try:
-                self.X = pd.read_pickle(path / 'X.pkl')
-                self.y = pd.read_pickle(path / 'y.pkl')
+                self.X = pd.read_pickle(path.joinpath('X.pkl'))
+                self.y = pd.read_pickle(path.joinpath('y.pkl'))
+
             except Exception as e:
                 raise IOError(f"Error loading data from {path}: {e}")
 
@@ -215,3 +214,36 @@ class DataHandler:
         y_array['logsfr'] = logsfr
 
         return y_array
+
+    label_rev_func = {'Mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
+                      'Dust': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                      'Z': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                      'SFR': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
+                      }
+
+    def postprocess_y(self, y: np.ndarray) -> pd.DataFrame:
+        """
+        Postprocess the y vector by applying the inverse transforms.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Preprocessed y vector.
+
+        Returns
+        -------
+        pd.DataFrame
+            Postprocessed y DataFrame.
+        """
+        inverse_transforms = {
+            'logmass': DataHandler.label_rev_func['Mass'],
+            'logdustmass': DataHandler.label_rev_func['Dust'],
+            'logmet': DataHandler.label_rev_func['Z'],
+            'logsfr': DataHandler.label_rev_func['SFR'],
+        }
+
+        postprocessed_y = {}
+        for key, func in inverse_transforms.items():
+            postprocessed_y[key.replace("log", "")] = func(y[key])
+
+        return pd.DataFrame(postprocessed_y)

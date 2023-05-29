@@ -145,6 +145,7 @@ class TrainPredictHandler(BaseModel):
             if self.weight_flag:
                 y_train_weights = Weightify(n_bins=self.weight_bins).fit_transform(
                     y=y_train).reshape(-1, 1)
+                print(y_train_weights.shape)
             else:
                 y_train_weights = np.ones(y_train.shape)
 

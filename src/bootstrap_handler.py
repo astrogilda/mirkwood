@@ -6,6 +6,7 @@ from typing import Callable, List, Optional, Tuple
 import numpy as np
 from src.model_handler import ModelHandler
 from pydantic_numpy import NDArray, NDArrayFp32
+from utils.reshape import reshape_array
 
 # Suppress all warnings
 import warnings
@@ -97,7 +98,7 @@ class BootstrapHandler(BaseModel):
             raise ValueError("frac_samples_best should be in (0, 1] range")
         return v
 
-    def resample_data(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def resample_data(self, x: np.ndarray, y: np.ndarray, y_weights: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform resampling of x and y data.
 
@@ -108,8 +109,7 @@ class BootstrapHandler(BaseModel):
         """
         n_samples = int(self.frac_samples_best * len(x))
         idx_res = numba_resample(np.arange(len(x)), n_samples)
-        x_res, y_res = x[idx_res], y[idx_res]
-        y_res_weights = np.ones_like(y_res)
+        x_res, y_res, y_res_weights = x[idx_res], y[idx_res], y_weights[idx_res]
         return x_res, y_res, y_res_weights
 
     @staticmethod
@@ -135,12 +135,12 @@ class BootstrapHandler(BaseModel):
         """
         if list_of_fitted_transformers:
             for ytr in reversed(list_of_fitted_transformers):
-                y_pred_upper = ytr.inverse_transform(
-                    y_pred_upper.reshape(-1, 1)).reshape(-1,)
-                y_pred_lower = ytr.inverse_transform(
-                    y_pred_lower.reshape(-1, 1)).reshape(-1,)
-                y_pred_mean = ytr.inverse_transform(
-                    y_pred_mean.reshape(-1, 1)).reshape(-1,)
+                y_pred_upper = reshape_array(ytr.inverse_transform(
+                    y_pred_upper.reshape(-1, 1)))
+                y_pred_lower = reshape_array(ytr.inverse_transform(
+                    y_pred_lower.reshape(-1, 1)))
+                y_pred_mean = reshape_array(ytr.inverse_transform(
+                    y_pred_mean.reshape(-1, 1)))
         return y_pred_upper, y_pred_lower, y_pred_mean
 
     @staticmethod
