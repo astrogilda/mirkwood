@@ -11,7 +11,6 @@ from warnings import catch_warnings, simplefilter
 import shap
 from numba import njit, jit
 from ngboost import NGBRegressor
-from utils.custom_pydantic_classes import TransformerMixinField, NGBRegressorField
 from utils.reshape import reshape_array
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)

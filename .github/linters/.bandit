@@ -1,0 +1,5 @@
+[bandit]
+skips  = B101
+targets = .
+recursive = true
+exclude = ./venv/,./env/,./node_modules/,./cacheback/,./.env,./.venv,migrations,.mypy_cache/,.cache/pre-commit/

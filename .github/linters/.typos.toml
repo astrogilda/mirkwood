@@ -1,0 +1,11 @@
+[default.extend-words]
+# Don't correct the test site "BA"
+BA = "BA"
+# model metrics
+mape = "mape"
+[type.changelog]
+extend-glob = ["CHANGELOG.md"]
+check-file = false
+[type.bandit]
+extend-glob = ["bandit.yml"]
+check-file = false

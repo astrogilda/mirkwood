@@ -1,0 +1,156 @@
+astor==0.8.1
+    # via formulaic
+astropy==5.2.2
+    # via -r requirements.in
+autograd==1.5
+    # via
+    #   autograd-gamma
+    #   lifelines
+autograd-gamma==0.5.0
+    # via lifelines
+cloudpickle==2.2.1
+    # via shap
+contourpy==1.0.7
+    # via matplotlib
+cycler==0.11.0
+    # via matplotlib
+dill==0.3.6
+    # via
+    #   multiprocess
+    #   pathos
+fonttools==4.39.4
+    # via matplotlib
+formulaic==0.6.1
+    # via lifelines
+future==0.18.3
+    # via autograd
+graphlib-backport==1.0.3
+    # via formulaic
+importlib-metadata==6.6.0
+    # via numba
+importlib-resources==5.12.0
+    # via matplotlib
+interface-meta==1.3.0
+    # via formulaic
+joblib==1.2.0
+    # via scikit-learn
+kiwisolver==1.4.4
+    # via matplotlib
+lifelines==0.27.7
+    # via ngboost
+llvmlite==0.40.0
+    # via numba
+matplotlib==3.7.1
+    # via
+    #   lifelines
+    #   seaborn
+multiprocess==0.70.14
+    # via pathos
+ngboost==0.4.1
+    # via -r requirements.in
+numba==0.57.0
+    # via
+    #   -r requirements.in
+    #   shap
+numpy==1.24.3
+    # via
+    #   -r requirements.in
+    #   astropy
+    #   autograd
+    #   contourpy
+    #   formulaic
+    #   lifelines
+    #   matplotlib
+    #   ngboost
+    #   numba
+    #   pandas
+    #   pydantic-numpy
+    #   pyerfa
+    #   scikit-learn
+    #   scipy
+    #   seaborn
+    #   shap
+packaging==23.1
+    # via
+    #   astropy
+    #   matplotlib
+    #   shap
+pandas==2.0.1
+    # via
+    #   -r requirements.in
+    #   formulaic
+    #   lifelines
+    #   ngboost
+    #   seaborn
+    #   shap
+pathos==0.3.0
+    # via -r requirements.in
+pillow==9.5.0
+    # via matplotlib
+pox==0.3.2
+    # via pathos
+ppft==1.7.6.6
+    # via pathos
+pydantic==1.10.8
+    # via
+    #   -r requirements.in
+    #   pydantic-numpy
+pydantic-numpy @ git+https://github.com/cheind/pydantic-numpy.git@ff55505956238cedca7864d1bca18b7dc6433f44
+    # via -r requirements.in
+pyerfa==2.0.0.3
+    # via astropy
+pyparsing==3.0.9
+    # via matplotlib
+python-dateutil==2.8.2
+    # via
+    #   matplotlib
+    #   pandas
+pytz==2023.3
+    # via pandas
+pyyaml==6.0
+    # via astropy
+scikit-learn==1.2.2
+    # via
+    #   -r requirements.in
+    #   ngboost
+    #   shap
+scipy==1.10.1
+    # via
+    #   -r requirements.in
+    #   autograd-gamma
+    #   formulaic
+    #   lifelines
+    #   ngboost
+    #   scikit-learn
+    #   shap
+seaborn==0.12.2
+    # via -r requirements.in
+sedpy==1.0.0
+    # via -r requirements.in
+shap==0.41.0
+    # via -r requirements.in
+six==1.16.0
+    # via
+    #   -r requirements.in
+    #   python-dateutil
+slicer==0.0.7
+    # via shap
+threadpoolctl==3.1.0
+    # via scikit-learn
+tqdm==4.65.0
+    # via
+    #   -r requirements.in
+    #   ngboost
+    #   shap
+typing-extensions==4.6.0
+    # via
+    #   formulaic
+    #   pydantic
+tzdata==2023.3
+    # via pandas
+wrapt==1.15.0
+    # via formulaic
+zipp==3.15.0
+    # via
+    #   importlib-metadata
+    #   importlib-resources

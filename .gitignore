@@ -135,10 +135,6 @@ dmypy.json
 .vscode/
 .devcontainer/
 
-# Ignore conda env
-fermata2/**
-# Ignore fermata env
-.fermata2/**
 
 # pyproject.toml
 .pyproject.toml
