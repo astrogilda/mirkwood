@@ -7,7 +7,6 @@ from src.bootstrap_handler import BootstrapHandler
 from src.model_handler import ModelHandler
 from utils.weightify import Weightify
 from pydantic_numpy import NDArray, NDArrayFp32
-from utils.custom_pydantic_classes import TransformerMixinField
 from pathlib import Path
 
 import os

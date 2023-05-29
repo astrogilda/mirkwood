@@ -87,16 +87,16 @@ def test_data_handler_postprocess_y():
     """
     # Create a mock y array
     dtype = np.dtype([
-        ('logmass', float),
-        ('logdustmass', float),
-        ('logmet', float),
-        ('logsfr', float),
+        ('log_stellar_mass', float),
+        ('log_dust_mass', float),
+        ('log_metallicty', float),
+        ('log_sfr', float),
     ])
     y_array = np.empty(2, dtype=dtype)
-    y_array['logmass'] = [1, 2]
-    y_array['logdustmass'] = [3, 4]
-    y_array['logmet'] = [5, 6]
-    y_array['logsfr'] = [7, 8]
+    y_array['log_stellar_mass'] = [1, 2]
+    y_array['log_dust_mass'] = [3, 4]
+    y_array['log_metallicty'] = [5, 6]
+    y_array['log_sfr'] = [7, 8]
 
     # Create a DataHandler object
     config = DataHandlerConfig(mulfac=1.0)
@@ -107,16 +107,16 @@ def test_data_handler_postprocess_y():
 
     # Expected output DataFrame
     expected_output = pd.DataFrame({
-        'mass': [10, 100],
-        'dustmass': [999, 9999],
-        'met': [100000, 1000000],
+        'stellar_mass': [10, 100],
+        'dust_mass': [999, 9999],
+        'metallicity': [100000, 1000000],
         'sfr': [9999999, 99999999],
     })
 
     # Change dtype of 'log' columns to match y_array dtype
     for col in expected_output.columns:
         expected_output[col] = expected_output[col].astype(
-            dtype["log"+col].type)
+            dtype["log_"+col].type)
 
     # Compare the postprocessed y DataFrame with the expected output DataFrame
     pd.testing.assert_frame_equal(postprocessed_y, expected_output)
@@ -143,11 +143,11 @@ def test_data_handler_preprocess_y():
 
     # Check the types and values
     assert isinstance(preprocessed_y, np.ndarray)
-    assert np.allclose(preprocessed_y['logmass'], [2, 3])
-    assert np.allclose(preprocessed_y['logdustmass'], [
+    assert np.allclose(preprocessed_y['log_stellar_mass'], [2, 3])
+    assert np.allclose(preprocessed_y['log_dust_mass'], [
                        np.log10(101), np.log10(201)])
-    assert np.allclose(preprocessed_y['logmet'], [0, np.log10(2)])
-    assert np.allclose(preprocessed_y['logsfr'], [
+    assert np.allclose(preprocessed_y['log_metallicity'], [0, np.log10(2)])
+    assert np.allclose(preprocessed_y['log_sfr'], [
                        np.log10(101), np.log10(201)])
 
 

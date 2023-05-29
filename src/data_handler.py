@@ -190,35 +190,30 @@ class DataHandler:
         np.ndarray
             Preprocessed y vector.
         """
-        logmass = np.log10(y['stellar_mass'].values)
-        logdustmass = np.log10(1 + y['dust_mass']).values
-        logmet = np.log10(y['metallicity']).values
-        logsfr = np.log10(1 + y['sfr']).values
-
-        # Avoid log of zero or negative values
-        logmass[logmass < self.config.eps] = 0
-        logsfr[logsfr < self.config.eps] = 0
-        logdustmass[logdustmass < self.config.eps] = 0
+        log_stellar_mass = np.log10(y['stellar_mass'].values + self.config.eps)
+        log_dust_mass = np.log10(1 + y['dust_mass']).values
+        log_metallicity = np.log10(y['metallicity']).values
+        log_sfr = np.log10(1 + y['sfr']).values
 
         dtype = np.dtype([
-            ('logmass', float),
-            ('logdustmass', float),
-            ('logmet', float),
-            ('logsfr', float),
+            ('log_stellar_mass', float),
+            ('log_dust_mass', float),
+            ('log_metallicity', float),
+            ('log_sfr', float),
         ])
 
         y_array = np.empty(len(y), dtype=dtype)
-        y_array['logmass'] = logmass
-        y_array['logdustmass'] = logdustmass
-        y_array['logmet'] = logmet
-        y_array['logsfr'] = logsfr
+        y_array['log_stellar_mass'] = log_stellar_mass
+        y_array['log_dust_mass'] = log_dust_mass
+        y_array['log_metallicity'] = log_metallicity
+        y_array['log_sfr'] = log_sfr
 
         return y_array
 
-    label_rev_func = {'Mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
-                      'Dust': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
-                      'Z': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
-                      'SFR': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
+    label_rev_func = {'stellar_mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
+                      'dust_mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                      'metallicity': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                      'sfr': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
                       }
 
     def postprocess_y(self, y: np.ndarray) -> pd.DataFrame:
@@ -236,14 +231,14 @@ class DataHandler:
             Postprocessed y DataFrame.
         """
         inverse_transforms = {
-            'logmass': DataHandler.label_rev_func['Mass'],
-            'logdustmass': DataHandler.label_rev_func['Dust'],
-            'logmet': DataHandler.label_rev_func['Z'],
-            'logsfr': DataHandler.label_rev_func['SFR'],
+            'log_stellar_mass': DataHandler.label_rev_func['stellar_mass'],
+            'log_dust_mass': DataHandler.label_rev_func['dust_mass'],
+            'log_metallicity': DataHandler.label_rev_func['metallicity'],
+            'log_sfr': DataHandler.label_rev_func['sfr'],
         }
 
         postprocessed_y = {}
         for key, func in inverse_transforms.items():
-            postprocessed_y[key.replace("log", "")] = func(y[key])
+            postprocessed_y[key.replace("log_", "")] = func(y[key])
 
         return pd.DataFrame(postprocessed_y)
