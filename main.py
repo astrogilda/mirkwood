@@ -36,13 +36,13 @@ import pathos.multiprocessing as mp
 from astropy.stats import mad_std, median_absolute_deviation as mad
 import shap
 from scipy import optimize
-from metrics import *
+from utils.metrics import *
 from sedpy.observate import load_filters
 
-from weightify import Weightify
-from data_handler import DataHandler, CustomCVConfig, DataHandlerConfig
-from model_handler import ModelHandler, ModelHandlerConfig
-from bootstrap_handler import BootstrapHandler
+from utils.weightify import Weightify
+from src.data_handler import DataHandler, CustomCVConfig, DataHandlerConfig
+from src.model_handler import ModelHandler, ModelHandlerConfig
+from src.bootstrap_handler import BootstrapHandler
 from functools import partial
 
 from matplotlib import pyplot as plt

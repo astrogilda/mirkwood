@@ -3,7 +3,7 @@ from numba import jit
 
 
 @jit(nopython=True)
-def custom_cv(y: np.array, n_folds: int):
+def custom_cv(y: np.array, n_folds: int, random_state: int = 10):
     """
     Perform custom cross-validation.
 
@@ -20,7 +20,7 @@ def custom_cv(y: np.array, n_folds: int):
         raise ValueError(
             'n_folds cannot be greater than the number of samples')
 
-    np.random.seed(10)
+    np.random.seed(random_state)
     cv_indices = np.empty((n_folds, n_samples), dtype=np.int64)
     cv_indices[:] = -1
     counts = np.zeros(n_folds, dtype=np.int64)
@@ -41,9 +41,10 @@ def custom_cv(y: np.array, n_folds: int):
 
 
 class CustomCV:
-    def __init__(self, y: np.array, n_folds: int = 10):
+    def __init__(self, y: np.array, n_folds: int = 10, random_state: int = 10):
         self.y = np.array(y)
         self.n_folds = n_folds
+        self.random_state = random_state
         self.cv_indices, self.counts = custom_cv(y, n_folds)
 
     def get_indices(self):

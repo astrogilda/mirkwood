@@ -1,73 +1,48 @@
 from hypothesis.extra.numpy import arrays
-import numpy as np
-import pytest
 from hypothesis import given, strategies as st, settings
 from sklearn.exceptions import NotFittedError
-from utils.weightify import Weightify, Style
+from utils.weightify import Weightify, WeightifyConfig
+import numpy as np
+import pytest
 import math
+from utils.weightify import Style
 
 # Define a Hypothesis strategy for valid weightify initializers
-valid_weightify_args = st.fixed_dictionaries({
-    'style': st.sampled_from(Style),
-    'lds_ks': st.integers(1, 10),
-    'n_bins': st.integers(10, 1000),
-    'beta': st.floats(0, 1),
-    'bw_method': st.one_of(st.floats(0.1, 10), st.text()),
-    'lds_sigma': st.floats(0.02, 100),
-})
+valid_weightify_args = st.builds(WeightifyConfig,
+                                 n_bins=st.integers(10, 1000),
+                                 bw_method=st.one_of(
+                                     st.floats(0.1, 10), st.text()),
+                                 lds_ks=st.integers(1, 10),
+                                 lds_sigma=st.floats(0.1, 10),
+                                 style=st.sampled_from(Style),
+                                 beta=st.floats(0, 1))
 
 # Define a Hypothesis strategy for numpy arrays
 numpy_array_strategy = arrays(dtype=float, shape=st.integers(
     100, 10000), elements=st.floats(.01, 1000))
 
 
-def test_weightify_bad_init():
-    """
-    Test Weightify initialization with invalid arguments.
-
-    Raises
-    ------
-    ValueError
-        If Weightify is initialized with invalid arguments.
-    """
-    # Test a variety of incorrect initializers
-    with pytest.raises(ValueError):
-        Weightify(lds_ks=-11)
-    with pytest.raises(ValueError):
-        Weightify(n_bins=9)
-    with pytest.raises(ValueError):
-        Weightify(beta=-0.1)
-    with pytest.raises(ValueError):
-        Weightify(bw_method=0)
-    with pytest.raises(ValueError):
-        Weightify(lds_sigma=0.01)
-    with pytest.raises(ValueError):
-        Weightify(lds_sigma=101)
-
-
 @given(valid_weightify_args)
-def test_weightify_init(args):
+def test_weightify_init(config):
     """
     Test Weightify initialization with valid arguments.
 
     Parameters
     ----------
-    args : dict
-        Dictionary containing valid Weightify arguments.
+    config : WeightifyConfig
+        Valid WeightifyConfig instance.
 
     Raises
     ------
     AssertionError
         If Weightify is not initialized correctly.
     """
-    # Test that we can initialize Weightify with a variety of valid arguments
-    w = Weightify(**args)
+    w = Weightify(config)
     assert isinstance(w, Weightify)
-    for k, v in args.items():
-        assert getattr(w, k) == v
+    assert w.config == config
 
 
-@given(st.builds(Weightify), numpy_array_strategy)
+@given(st.builds(Weightify, config=valid_weightify_args), numpy_array_strategy)
 def test_weightify_transform_before_fit(w, y):
     """
     Test calling transform before fit raises NotFittedError.
@@ -76,7 +51,7 @@ def test_weightify_transform_before_fit(w, y):
     ----------
     w : Weightify
         Initialized Weightify object.
-    X : numpy array
+    y : numpy array
         Input array.
 
     Raises
@@ -84,7 +59,6 @@ def test_weightify_transform_before_fit(w, y):
     NotFittedError
         If transform is called before fit.
     """
-    # Test that calling transform before fit raises a NotFittedError
     with pytest.raises(NotFittedError):
         w.transform(y)
 
@@ -108,7 +82,6 @@ def test_weightify_fit_transform(w, y):
         If the length of transformed weights is not equal to the length of the input array,
         or if any weight is not within the range [0.1, 10].
     """
-    # Test that we can fit and transform a variety of input arrays
     w.fit(y)
     weights = w.transform(y)
     assert len(weights) == len(y)
@@ -133,7 +106,6 @@ def test_weightify_fit_transform_idempotent(w, y):
     AssertionError
         If the output weights from two fit_transform calls are not close.
     """
-    # Test that calling fit_transform twice gives the same result
     w.fit(y)
     weights1 = w.transform(y)
     w.fit(y)
@@ -159,7 +131,87 @@ def test_weightify_fit_transform_normalizes(w, y):
     AssertionError
         If the sum of the output weights is not close to the length of the input array.
     """
-    # Test that the sum of the output weights is approximately equal to the length of the input
     w.fit(y)
     weights = w.transform(y)
     assert math.isclose(np.sum(weights), len(y), rel_tol=.2)
+
+
+# Define a Hypothesis strategy for invalid weightify configurations
+invalid_weightify_args = st.one_of(
+    st.builds(WeightifyConfig, n_bins=st.integers(1, 9)),  # n_bins too low
+    # bw_method out of range
+    st.builds(WeightifyConfig, bw_method=st.floats(-1, 0)),
+    # lds_ks out of range
+    st.builds(WeightifyConfig, lds_ks=st.integers(-10, 0)),
+    # lds_sigma out of range
+    st.builds(WeightifyConfig, lds_sigma=st.floats(-1, 0)),
+    st.builds(WeightifyConfig, beta=st.floats(-1, 0))  # beta out of range
+)
+
+
+@given(invalid_weightify_args)
+def test_weightify_invalid_init(config):
+    """
+    Test Weightify initialization with invalid arguments.
+
+    Parameters
+    ----------
+    config : WeightifyConfig
+        Invalid WeightifyConfig instance.
+
+    Raises
+    ------
+    ValueError
+        If Weightify is initialized with invalid arguments.
+    """
+    with pytest.raises(ValueError):
+        Weightify(config)
+
+
+@given(st.builds(Weightify, config=valid_weightify_args), numpy_array_strategy)
+@settings(deadline=None, max_examples=100)
+def test_weightify_transform_after_fit_with_diff_data(w, y, z):
+    """
+    Test calling transform on different data after fit.
+
+    Parameters
+    ----------
+    w : Weightify
+        Initialized Weightify object.
+    y, z : numpy array
+        Input arrays.
+
+    Raises
+    ------
+    AssertionError
+        If the output weights from two different input arrays are close after fitting on one of them.
+    """
+    w.fit(y)
+    weights_y = w.transform(y)
+    weights_z = w.transform(z)
+    assert not np.allclose(weights_y, weights_z)
+
+
+@given(st.builds(Weightify, config=valid_weightify_args), numpy_array_strategy)
+@settings(deadline=None, max_examples=100)
+def test_weightify_fit_idempotent(w, y):
+    """
+    Test calling fit twice gives the same result.
+
+    Parameters
+    ----------
+    w : Weightify
+        Initialized Weightify object.
+    y : numpy array
+        Input array.
+
+    Raises
+    ------
+    AssertionError
+        If the output weights from two fit calls are not close.
+    """
+    w.fit(y)
+    weights1 = w.transform(y)
+    w.fit(y)
+    weights2 = w.transform(y)
+    assert np.allclose(weights1, weights2)

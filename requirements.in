@@ -13,3 +13,4 @@ sedpy~=1.0
 shap~=0.41
 six~=1.16
 tqdm~=4.65
+optuna~=3.2

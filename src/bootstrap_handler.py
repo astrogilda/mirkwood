@@ -5,8 +5,10 @@ from sklearn.base import TransformerMixin
 from typing import Callable, List, Optional, Tuple
 import numpy as np
 from src.model_handler import ModelHandler
-from pydantic_numpy import NDArray, NDArrayFp32
+from pydantic_numpy import NDArray, NDArrayFp32, NDArrayFp64
 from utils.reshape import reshape_array
+from data_handler import DataHandler, GalaxyProperty
+from utils.weightify import Weightify
 
 # Suppress all warnings
 import warnings
@@ -70,15 +72,16 @@ class BootstrapHandler(BaseModel):
     frac_samples_best : float
         Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
     """
-    x: NDArrayFp32
-    y: NDArrayFp32
+    X: NDArrayFp64
+    y: NDArrayFp64
     frac_samples_best: float = Field(1.0, gt=0, lte=1)
+    galaxy_property: GalaxyProperty = Field(GalaxyProperty.Mass)
 
-    @validator('x')
-    def _check_x_dimension(cls, v: np.ndarray) -> np.ndarray:
-        """Validate if the input x array is two-dimensional"""
+    @validator('X')
+    def _check_X_dimension(cls, v: np.ndarray) -> np.ndarray:
+        """Validate if the input X array is two-dimensional"""
         if len(v.shape) != 2:
-            raise ValueError("x should be 2-dimensional")
+            raise ValueError("X should be 2-dimensional")
         return v
 
     @validator('y', pre=True)
@@ -98,19 +101,19 @@ class BootstrapHandler(BaseModel):
             raise ValueError("frac_samples_best should be in (0, 1] range")
         return v
 
-    def resample_data(self, x: np.ndarray, y: np.ndarray, y_weights: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def resample_data(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Perform resampling of x and y data.
+        Perform resampling of X and y data.
 
         Returns
         -------
         Tuple[np.ndarray, np.ndarray, np.ndarray]
-            x_resampled, y_resampled, y_resampled_weights
+            X_resampled, y_resampled, y_resampled_weights
         """
-        n_samples = int(self.frac_samples_best * len(x))
-        idx_res = numba_resample(np.arange(len(x)), n_samples)
-        x_res, y_res, y_res_weights = x[idx_res], y[idx_res], y_weights[idx_res]
-        return x_res, y_res, y_res_weights
+        n_samples = int(self.frac_samples_best * len(X))
+        idx_res = numba_resample(np.arange(len(X)), n_samples)
+        X_res, y_res = X[idx_res], y[idx_res]
+        return X_res, y_res
 
     @staticmethod
     def apply_inverse_transform(y_pred_upper: np.ndarray, y_pred_lower: np.ndarray, y_pred_mean: np.ndarray, list_of_fitted_transformers: List[TransformerMixin]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -143,33 +146,6 @@ class BootstrapHandler(BaseModel):
                     y_pred_mean.reshape(-1, 1)))
         return y_pred_upper, y_pred_lower, y_pred_mean
 
-    @staticmethod
-    def apply_reversify(y_pred_upper: np.ndarray, y_pred_lower: np.ndarray, y_pred_mean: np.ndarray, reversifyfn: Optional[Callable[[np.ndarray], np.ndarray]]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Apply a reverse function to y predictions.
-
-        Parameters
-        ----------
-        y_pred_upper : np.ndarray
-            Upper bound predictions.
-        y_pred_lower : np.ndarray
-            Lower bound predictions.
-        y_pred_mean : np.ndarray
-            Mean predictions.
-        reversifyfn : Callable[[np.ndarray], np.ndarray], optional
-            Function to reverse predictions, by default None
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray, np.ndarray]
-            y_pred_upper_reversed, y_pred_lower_reversed, y_pred_mean_reversed
-        """
-        if reversifyfn is not None:
-            y_pred_upper = reversifyfn(y_pred_upper)
-            y_pred_lower = reversifyfn(y_pred_lower)
-            y_pred_mean = reversifyfn(y_pred_mean)
-        return y_pred_upper, y_pred_lower, y_pred_mean
-
     def bootstrap_func_mp(self, model_handler: ModelHandler, iteration_num: int,
                           property_name: Optional[str] = None, testfoldnum: int = 0) -> Tuple[np.ndarray,
                                                                                               np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -192,12 +168,12 @@ class BootstrapHandler(BaseModel):
         Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
             Tuple of prediction mean, std, lower, upper, and mean SHAP values.
         """
-        x_res, y_res, y_res_weights = self.resample_data(
-            model_handler.x, model_handler.y)
-        model_handler.x = x_res
-        model_handler.y = y_res
-        model_handler.y_weights = y_res_weights
-        model_handler.transform_data()
+        weightifier = Weightify()
+        X_res, y_res = self.resample_data(
+            model_handler.X_train, model_handler.y_train)
+        model_handler.X_train = X_res
+        model_handler.y_train = y_res
+        fitted_transformers = model_handler.transform_data()
 
         file_path = model_handler.file_path / \
             f'ngb_prop={property_name}_fold={testfoldnum}_bag={iteration_num}.pkl'
@@ -209,11 +185,11 @@ class BootstrapHandler(BaseModel):
 
         estimator = model_handler.fit_or_load_estimator()
         y_pred_mean, y_pred_std, y_pred_lower, y_pred_upper, shap_values_mean = model_handler.compute_prediction_bounds_and_shap_values(
-            x_res)
+            X_res)
         y_pred_upper, y_pred_lower, y_pred_mean = BootstrapHandler.apply_inverse_transform(
-            y_pred_upper, y_pred_lower, y_pred_mean, model_handler.y_transformer)
-        y_pred_upper, y_pred_lower, y_pred_mean = BootstrapHandler.apply_reversify(
-            y_pred_upper, y_pred_lower, y_pred_mean, model_handler.reversifyfn)
+            y_pred_upper, y_pred_lower, y_pred_mean, fitted_transformers)
+        y_pred_upper, y_pred_lower, y_pred_mean = DataHandler.postprocess_y(
+            ys=(y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
 
         y_pred_std = (np.ma.masked_invalid(y_pred_upper) -
                       np.ma.masked_invalid(y_pred_lower))/2

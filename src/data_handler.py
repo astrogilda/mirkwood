@@ -14,6 +14,13 @@ class TrainData(str, Enum):
     SIMBA = "simba"
 
 
+class GalaxyProperty(str, Enum):
+    STELLAR_MASS = "stellar_mass"
+    SFR = "sfr"
+    METALLICITY = "metallicity"
+    DUST_MASS = "dust_mass"
+
+
 class DataFrameField(pd.DataFrame):
     @classmethod
     def __get_validators__(cls):
@@ -190,10 +197,11 @@ class DataHandler:
         np.ndarray
             Preprocessed y vector.
         """
-        log_stellar_mass = np.log10(y['stellar_mass'].values + self.config.eps)
-        log_dust_mass = np.log10(1 + y['dust_mass']).values
-        log_metallicity = np.log10(y['metallicity']).values
-        log_sfr = np.log10(1 + y['sfr']).values
+        log_stellar_mass = np.log10(
+            y[GalaxyProperty.STELLAR_MASS].values + self.config.eps)
+        log_dust_mass = np.log10(1 + y[GalaxyProperty.DUST_MASS]).values
+        log_metallicity = np.log10(y[GalaxyProperty.METALLICITY]).values
+        log_sfr = np.log10(1 + y[GalaxyProperty.SFR]).values
 
         dtype = np.dtype([
             ('log_stellar_mass', float),
@@ -210,35 +218,48 @@ class DataHandler:
 
         return y_array
 
-    label_rev_func = {'stellar_mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
-                      'dust_mass': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
-                      'metallicity': lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
-                      'sfr': lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
-                      }
+    @staticmethod
+    def label_rev_func():
+        return {GalaxyProperty.STELLAR_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
+                GalaxyProperty.DUST_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                GalaxyProperty.METALLICITY: lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
+                }
 
-    def postprocess_y(self, y: np.ndarray) -> pd.DataFrame:
+    @staticmethod
+    def inverse_transforms():
+        return {
+            'log_stellar_mass': DataHandler.label_rev_func[GalaxyProperty.STELLAR_MASS],
+            'log_dust_mass': DataHandler.label_rev_func[GalaxyProperty.DUST_MASS],
+            'log_metallicity': DataHandler.label_rev_func[GalaxyProperty.METALLICITY],
+            'log_sfr': DataHandler.label_rev_func[GalaxyProperty.SFR],
+        }
+
+    def postprocess_y(self, *ys: Union[np.ndarray, Tuple[np.ndarray]], prop: GalaxyProperty) -> Union[np.ndarray, Tuple[np.ndarray]]:
         """
-        Postprocess the y vector by applying the inverse transforms.
+        Postprocess the y vector(s) by applying the inverse transforms.
 
         Parameters
         ----------
-        y : np.ndarray
-            Preprocessed y vector.
+        *ys : Union[np.ndarray, Tuple[np.ndarray]]
+            Preprocessed y vector(s).
+        prop: GalaxyProperty
+            The galaxy property to apply the inverse transform.
 
         Returns
         -------
-        pd.DataFrame
-            Postprocessed y DataFrame.
+        Union[np.ndarray, Tuple[np.ndarray]]
+            Postprocessed y vector(s).
         """
-        inverse_transforms = {
-            'log_stellar_mass': DataHandler.label_rev_func['stellar_mass'],
-            'log_dust_mass': DataHandler.label_rev_func['dust_mass'],
-            'log_metallicity': DataHandler.label_rev_func['metallicity'],
-            'log_sfr': DataHandler.label_rev_func['sfr'],
-        }
+        postprocessed_ys = []
 
-        postprocessed_y = {}
-        for key, func in inverse_transforms.items():
-            postprocessed_y[key.replace("log_", "")] = func(y[key])
+        for y in ys:
+            # Create a numpy array of zeros with the same shape as y
+            postprocessed_y = np.zeros_like(y)
+            for key, func in DataHandler.inverse_transforms().items():
+                if prop.value in key:  # only apply the inverse transform for the given prop
+                    postprocessed_y[key.replace("log_", "")] = func(y[key])
+            postprocessed_ys.append(postprocessed_y)
 
-        return pd.DataFrame(postprocessed_y)
+        # Return tuple if more than one array, else return the single array
+        return tuple(postprocessed_ys) if len(postprocessed_ys) > 1 else postprocessed_ys[0]
