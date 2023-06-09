@@ -152,3 +152,8 @@ main.py
 main_optimized.py
 make_plots.py
 make_plots_optimized.py
+
+
+# ignore these specific files
+utils/custom_pydantic_classes.py
+utils/logger.py

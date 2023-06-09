@@ -1,14 +1,13 @@
-import optuna
-from ngboost import NGBRegressor
-from optuna.integration import OptunaSearchCV
-from pydantic import BaseModel, Field, validator
-from typing import Callable, Dict, Optional, Any, Tuple
 import numpy as np
-from src.model_handler import ModelConfig
-from utils.custom_transformers_and_estimators import CustomNGBRegressor
-from utils.custom_cv import CustomCV
+import optuna
 from optuna.trial import Trial
+from pydantic import BaseModel, Field, validator
 from sklearn.compose import TransformedTargetRegressor
+from typing import Callable, Optional, Tuple
+
+from src.model_handler import ModelConfig, create_estimator
+from utils.custom_cv import CustomCV
+from utils.custom_transformers_and_estimators import CustomNGBRegressor, CustomTransformedTargetRegressor
 from utils.metrics import ProbabilisticErrorMetrics
 
 
@@ -20,7 +19,7 @@ def crps_scorer(y_true: np.ndarray, y_pred_mean: np.ndarray, y_pred_std: np.ndar
     crps_metrics = ProbabilisticErrorMetrics(
         yt=y_true, yp=y_pred_mean, yp_lower=y_lower, yp_upper=y_upper)
     crps_score = crps_metrics.gaussian_crps()
-    # Since OptunaSearchCV tries to maximize the score, we return the negative CRPS
+    # Since Optuna tries to maximize the score, we return the negative CRPS
     return -crps_score
 
 
@@ -41,19 +40,20 @@ class PipelineConfig(BaseModel):
     """
     Pydantic model for the configuration of the pipeline.
     """
-    model: TransformedTargetRegressor
+    estimator: CustomTransformedTargetRegressor = Field(
+        default=create_estimator(model_config=ModelConfig()))
 
     class Config:
         arbitrary_types_allowed: bool = True
 
-    @validator("model")
+    @validator("estimator")
     def check_model(cls, v):
         """
-        Validator for model. Checks that model is an instance of TransformedTargetRegressor.
+        Validator for estimator. Checks that estimator is an instance of TransformedTargetRegressor.
         """
         if not isinstance(v, TransformedTargetRegressor):
             raise ValueError(
-                "model must be an instance of TransformedTargetRegressor")
+                "estimator must be an instance of TransformedTargetRegressor")
         return v
 
 
@@ -68,8 +68,8 @@ class HPOHandlerParams(BaseModel):
     n_trials: int = Field(100, gt=0)
     timeout: Optional[int] = Field(30*60, gt=0)
     loss: Optional[Callable] = crps_scorer
-    # Use the CustomNGBRegressor with default parameters from ModelConfig
-    model: PipelineConfig = PipelineConfig()
+    # Use the TransformedTargetRegressor with default parameters from PipelineConfig
+    estimator: PipelineConfig = PipelineConfig()
     cv: CustomCV  # Accepts a cross-validator of type CustomCV
     z_score: float = 1.96
 
@@ -108,7 +108,7 @@ class HPOHandler:
                 raise ValueError(f"Unsupported distribution: {distribution}")
 
         # update parameters of the entire pipeline
-        model = self.params.model.model.set_params(**params)
+        pipeline = self.params.estimator.estimator.set_params(**params)
 
         scores = []
         for train_index, val_index in self.params.cv:
@@ -116,10 +116,11 @@ class HPOHandler:
             y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
             weights_fold = weights[train_index]
 
-            model.fit(X_train_fold, y_train_fold, sample_weight=weights_fold)
+            pipeline.fit(X_train_fold, y_train_fold,
+                         sample_weight=weights_fold)
 
-            y_val_fold_pred_mean = model.predict(X_val_fold)
-            y_val_fold_pred_std = model.regressor_.named_steps['regressor'].predict_std(
+            y_val_fold_pred_mean = pipeline.predict(X_val_fold)
+            y_val_fold_pred_std = pipeline.regressor_.named_steps['regressor'].predict_std(
                 X_val_fold)
 
             score = self.params.loss(
@@ -130,7 +131,7 @@ class HPOHandler:
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray, weights: np.ndarray) -> None:
         """
-        Fit the model to the training data.
+        Fit the pipeline to the training data.
         """
         study = optuna.create_study(
             direction='maximize')  # Change 'minimize' to 'maximize' if higher scores are better
@@ -140,8 +141,9 @@ class HPOHandler:
         self.best_trial = study.best_trial
 
         best_params = self.best_trial.params
-        self.params.model.model.set_params(**best_params)
-        self.params.model.model.fit(X_train, y_train, sample_weight=weights)
+        self.params.estimator.estimator.set_params(**best_params)
+        self.params.estimator.estimator.fit(
+            X_train, y_train, sample_weight=weights)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -149,7 +151,7 @@ class HPOHandler:
         """
         if self.best_trial is None:
             raise ValueError("You must call fit() before predict()")
-        return self.params.model.model.predict(X)
+        return self.params.estimator.estimator.predict(X)
 
     def predict_dist(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -160,8 +162,8 @@ class HPOHandler:
         if self.best_trial is None:
             raise ValueError("You must call fit() before predict_dist()")
 
-        y_pred = self.params.model.model.predict(X)
-        y_pred_std = self.params.model.model.regressor_.named_steps['regressor'].predict_std(
+        y_pred = self.params.estimator.estimator.predict(X)
+        y_pred_std = self.params.estimator.estimator.regressor_.named_steps['regressor'].predict_std(
             X)
         y_pred_upper = y_pred + self.z_score * y_pred_std
         y_pred_lower = y_pred - self.z_score * y_pred_std

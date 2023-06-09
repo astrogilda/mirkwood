@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Optional, Union, Callable
 import numpy as np
 import pandas as pd
 
@@ -29,7 +29,7 @@ class DataFrameField(pd.DataFrame):
     @classmethod
     def validate(cls, value):
         if value is not None and not isinstance(value, pd.DataFrame):
-            raise ValueError('Value must be a pandas DataFrame')
+            raise TypeError('Value must be a pandas DataFrame')
         return parse_obj_as(pd.DataFrame, value)
 
 
@@ -47,10 +47,12 @@ class DataSet(BaseModel):
         The y vector (target) of the dataset.
     """
 
-    arbitrary_types_allowed: bool = True
     name: str
     X: Optional[DataFrameField] = None
     y: Optional[DataFrameField] = None
+
+    class Config:
+        arbitrary_types_allowed: bool = True
 
     @property
     def is_loaded(self) -> bool:
@@ -70,19 +72,24 @@ class DataSet(BaseModel):
 
         Raises
         ------
-        IOError
-            If an error occurs while loading the data.
+        FileNotFoundError
+            If the files 'X.pkl' or 'y.pkl' cannot be found.
         """
         if not self.is_loaded:
 
-            path = Path('Simulations').joinpath(self.name)
+            base_path = Path.cwd()
+            simulations_path = base_path.joinpath('Simulations')
+            path = simulations_path.joinpath(self.name).resolve()
 
             try:
                 self.X = pd.read_pickle(path.joinpath('X.pkl'))
                 self.y = pd.read_pickle(path.joinpath('y.pkl'))
 
-            except Exception as e:
-                raise IOError(f"Error loading data from {path}: {e}")
+            except FileNotFoundError as e:
+                raise FileNotFoundError(f"Error loading data from {path}: {e}")
+
+    def __str__(self):
+        return f'DataSet {self.name}: Loaded={self.is_loaded}'
 
 
 class DataHandlerConfig(BaseModel):
@@ -102,6 +109,7 @@ class DataHandlerConfig(BaseModel):
     datasets : Dict[str, DataSet]
         Available datasets.
     """
+
     np_seed: int = 1
     eps: float = 1e-6
     mulfac: float = 1.0
@@ -153,6 +161,15 @@ class DataHandler:
         self.config = config
         np.random.seed(self.config.np_seed)
 
+    @property
+    def inverse_transforms(self) -> Dict[str, Callable[[np.ndarray], np.ndarray]]:
+        return {
+            'log_stellar_mass': self.label_rev_func()[GalaxyProperty.STELLAR_MASS],
+            'log_dust_mass': self.label_rev_func()[GalaxyProperty.DUST_MASS],
+            'log_metallicity': self.label_rev_func()[GalaxyProperty.METALLICITY],
+            'log_sfr': self.label_rev_func()[GalaxyProperty.SFR],
+        }
+
     def get_data(self, train_data: List[TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Load and preprocess datasets.
@@ -170,15 +187,18 @@ class DataHandler:
         if not train_data:
             raise ValueError("No datasets specified for loading.")
 
-        X, y = pd.DataFrame(), pd.DataFrame()
+        X_list, y_list = [], []
 
         # Load and concatenate datasets
         for key in train_data:
             dataset = self.config.datasets[key]
             if not dataset.is_loaded:
                 dataset.load()
-            X = pd.concat((X, dataset.X), axis=0).reset_index(drop=True)
-            y = pd.concat((y, dataset.y), axis=0).reset_index(drop=True)
+            X_list.append(dataset.X)
+            y_list.append(dataset.y)
+
+        X = pd.concat(X_list, axis=0).reset_index(drop=True)
+        y = pd.concat(y_list, axis=0).reset_index(drop=True)
 
         y = self.preprocess_y(y)
         return X * self.config.mulfac, y
@@ -226,15 +246,6 @@ class DataHandler:
                 GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
                 }
 
-    @staticmethod
-    def inverse_transforms():
-        return {
-            'log_stellar_mass': DataHandler.label_rev_func[GalaxyProperty.STELLAR_MASS],
-            'log_dust_mass': DataHandler.label_rev_func[GalaxyProperty.DUST_MASS],
-            'log_metallicity': DataHandler.label_rev_func[GalaxyProperty.METALLICITY],
-            'log_sfr': DataHandler.label_rev_func[GalaxyProperty.SFR],
-        }
-
     def postprocess_y(self, *ys: Union[np.ndarray, Tuple[np.ndarray]], prop: GalaxyProperty) -> Union[np.ndarray, Tuple[np.ndarray]]:
         """
         Postprocess the y vector(s) by applying the inverse transforms.
@@ -256,9 +267,10 @@ class DataHandler:
         for y in ys:
             # Create a numpy array of zeros with the same shape as y
             postprocessed_y = np.zeros_like(y)
-            for key, func in DataHandler.inverse_transforms().items():
-                if prop.value in key:  # only apply the inverse transform for the given prop
-                    postprocessed_y[key.replace("log_", "")] = func(y[key])
+            for key, func in self.inverse_transforms.items():
+                # only apply the inverse transform for the given prop
+                if prop.value in key.replace("log_", ""):
+                    postprocessed_y = func(y)  # func(y[key])
             postprocessed_ys.append(postprocessed_y)
 
         # Return tuple if more than one array, else return the single array

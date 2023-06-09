@@ -1,10 +1,8 @@
 from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
-from hypothesis.strategies import floats, lists, sampled_from
+from hypothesis.strategies import floats, lists, sampled_from, just, one_of
 import pytest
 from hypothesis import given, assume, settings
-from hypothesis.strategies import floats, lists, text, sampled_from
 from pydantic import ValidationError
-from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData
 import numpy as np
 from typing import List
 import pandas as pd
@@ -32,15 +30,15 @@ def test_data_handler_config_mulfac_negative(mulfac: float):
         config = DataHandlerConfig(mulfac=mulfac)
 
 
-@given(name=sampled_from(TrainData))
-def test_data_set_load_invalid(name: TrainData):
+@given(name=one_of(just("abc"), just("def"), just("ghi")))
+def test_data_set_load_invalid(name: str):
     """
     Test to check if the DataSet raises an IOError when trying to load a dataset with a random name.
 
     The function uses the hypothesis library to generate random strings as input.
     """
     # we only want to test invalid names here
-    assume(name not in [TrainData.SIMBA, TrainData.EAGLE, TrainData.TNG])
+    assume(name not in [member.value for member in TrainData])
     dataset = DataSet(name=name)
     with pytest.raises(IOError):
         dataset.load()
@@ -51,7 +49,7 @@ def test_data_set_load_valid():
     Test to check if the DataSet successfully loads a dataset with a known valid name.
     """
     for name in [TrainData.SIMBA, TrainData.EAGLE, TrainData.TNG]:
-        dataset = DataSet(name=name)
+        dataset = DataSet(name=name.value)
         try:
             dataset.load()
         except Exception:
@@ -65,7 +63,8 @@ def test_data_handler_get_data(train_data: List[TrainData], mulfac: float):
     Test to check if the DataHandler can get data with specific names.
     The function uses the hypothesis library to generate lists of specific strings and positive floats as input.
     """
-    config = DataHandlerConfig(mulfac=mulfac)
+    config = DataHandlerConfig(mulfac=mulfac, train_data=[
+                               data.value for data in train_data])
     handler = DataHandler(config)
     try:
         handler.get_data(train_data)
@@ -84,39 +83,11 @@ def test_data_handler_postprocess_y():
         ('log_metallicity', float),
         ('log_sfr', float),
     ])
-    y_array = np.empty(2, dtype=dtype)
-    y_array['log_stellar_mass'] = [1, 2]
-    y_array['log_dust_mass'] = [3, 4]
-    y_array['log_metallicity'] = [5, 6]
-    y_array['log_sfr'] = [7, 8]
-
-    config = DataHandlerConfig(mulfac=1.0)
-    handler = DataHandler(config)
-    postprocessed_y = handler.postprocess_y(y_array)
-
-    expected_output = pd.DataFrame({
-        GalaxyProperty.STELLAR_MASS: [10, 100],
-        GalaxyProperty.DUST_MASS: [999, 9999],
-        GalaxyProperty.METALLICITY: [100000, 1000000],
-        GalaxyProperty.SFR: [9999999, 99999999],
-    })
-
-    for col in expected_output.columns:
-        expected_output[col] = expected_output[col].astype(
-            dtype["log_"+col].type)
-
-    pd.testing.assert_frame_equal(postprocessed_y, expected_output)
-
-
-def test_data_handler_postprocess_y():
-    """
-    Test to check if the DataHandler postprocess_y method works correctly.
-    """
-    dtype = np.dtype([
-        ('log_stellar_mass', float),
-        ('log_dust_mass', float),
-        ('log_metallicity', float),
-        ('log_sfr', float),
+    dtype_no_log = np.dtype([
+        ('stellar_mass', float),
+        ('dust_mass', float),
+        ('metallicity', float),
+        ('sfr', float),
     ])
     y_array = np.zeros(2, dtype=dtype)
     y_array['log_stellar_mass'] = [1, 2]
@@ -127,33 +98,27 @@ def test_data_handler_postprocess_y():
     config = DataHandlerConfig(mulfac=1.0)
     handler = DataHandler(config)
     postprocessed_y = handler.postprocess_y(
-        y_array, GalaxyProperty.STELLAR_MASS)
-
-    expected_output = np.zeros_like(y_array)
-    expected_output['stellar_mass'] = [10, 100]
-
-    np.testing.assert_array_equal(postprocessed_y, expected_output)
-
-    postprocessed_y = handler.postprocess_y(y_array, GalaxyProperty.DUST_MASS)
-
-    expected_output = np.zeros_like(y_array)
-    expected_output['dust_mass'] = [999, 9999]
-
+        y_array['log_stellar_mass'], prop=GalaxyProperty.STELLAR_MASS)
+    expected_output = np.zeros(2, dtype=float)
+    expected_output = [10, 100]
     np.testing.assert_array_equal(postprocessed_y, expected_output)
 
     postprocessed_y = handler.postprocess_y(
-        y_array, GalaxyProperty.METALLICITY)
-
-    expected_output = np.zeros_like(y_array)
-    expected_output['metallicity'] = [100000, 1000000]
-
+        y_array['log_dust_mass'], prop=GalaxyProperty.DUST_MASS)
+    expected_output = np.zeros(2, dtype=float)
+    expected_output = [999, 9999]
     np.testing.assert_array_equal(postprocessed_y, expected_output)
 
-    postprocessed_y = handler.postprocess_y(y_array, GalaxyProperty.SFR)
+    postprocessed_y = handler.postprocess_y(
+        y_array['log_metallicity'], prop=GalaxyProperty.METALLICITY)
+    expected_output = np.zeros(2, dtype=float)
+    expected_output = [100000, 1000000]
+    np.testing.assert_array_equal(postprocessed_y, expected_output)
 
-    expected_output = np.zeros_like(y_array)
-    expected_output['sfr'] = [9999999, 99999999]
-
+    postprocessed_y = handler.postprocess_y(
+        y_array['log_sfr'], prop=GalaxyProperty.SFR)
+    expected_output = np.zeros(2, dtype=float)
+    expected_output = [9999999, 99999999]
     np.testing.assert_array_equal(postprocessed_y, expected_output)
 
 

@@ -201,23 +201,6 @@ class NGBoost:
         self.scalings.append(scale)
         return scale
 
-    def noise_maker(self, X, X_noise):
-        # assuming X is already log10(1+flux_measured)-scaled,
-        # and X_noise is an array of percentages.
-        X_noise = np.asarray(X_noise).reshape(1, -1)
-        noise = X_noise * np.random.default_rng().normal(size=(X.shape))
-        X_noisy_nonlog = (10**X - 1)*(1+noise)
-        # the clip in the following operation is to simulate non-detection. skipping for now.
-        # X_noisy = np.log10(1 + X_noisy_nonlog)
-        X_noisy = np.log10(1 + np.clip(a=X_noisy_nonlog, a_min=0., a_max=None))
-        # due to 35 filters. 36th variable, in chaining mode, is redshift.
-        q = np.where(X_noisy_nonlog[:, :35] == 0)[0]
-        if len(q) > 0:
-            pass
-            # print('noise value = ',np.max(X_noise))
-            # print('sample index/indices with noisy flux values = 0: ',set(q))
-        return X_noisy
-
     def fit(
         self,
         X,
@@ -229,7 +212,6 @@ class NGBoost:
         train_loss_monitor=None,
         val_loss_monitor=None,
         early_stopping_rounds=None,
-        X_noise=None,
     ):
         """
         Fits an NGBoost model to the data
@@ -275,7 +257,6 @@ class NGBoost:
             train_loss_monitor=train_loss_monitor,
             val_loss_monitor=val_loss_monitor,
             early_stopping_rounds=early_stopping_rounds,
-            X_noise=X_noise,
         )
 
     def partial_fit(
@@ -289,7 +270,6 @@ class NGBoost:
         train_loss_monitor=None,
         val_loss_monitor=None,
         early_stopping_rounds=None,
-        X_noise=None,
     ):
         """
         Fits an NGBoost model to the data appending base models to the existing ones.
@@ -345,19 +325,10 @@ class NGBoost:
                     test_size=self.validation_fraction,
                     random_state=self.random_state,
                 )
-                X_noise, X_noise_val, _, _ = train_test_split(
-                    X_noise, Y, test_size=self.validation_fraction, random_state=self.random_state)
 
             else:
                 X, X_val, Y, Y_val, sample_weight, val_sample_weight = train_test_split(
                     X,
-                    Y,
-                    sample_weight,
-                    test_size=self.validation_fraction,
-                    random_state=self.random_state,
-                )
-                X_noise, X_noise_val, _, _, sample_weight, val_sample_weight = train_test_split(
-                    X_noise,
                     Y,
                     sample_weight,
                     test_size=self.validation_fraction,
@@ -405,14 +376,6 @@ class NGBoost:
                 X, Y, sample_weight, params
             )
             self.col_idxs.append(col_idx)
-
-            ### adding noise. Sankalp, 07/20/2020, and then 08/28/2020, and then 09/14/20###
-            # add 0% noise by default
-            if X_noise is None:
-                X_noise = 0.0  # * np.ones((1,X_batch.shape[1]))
-
-            X_batch = self.noise_maker(X_batch, X_noise)
-            ### END OF ADDING NOISE ###
 
             D = self.Manifold(P_batch.T)
 
