@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field, validator
 from sklearn.compose import TransformedTargetRegressor
 from typing import Callable, Optional, Tuple
 
-from src.model_handler import ModelConfig, create_estimator
+from src.model_handler import ModelConfig
 from utils.custom_cv import CustomCV
-from utils.custom_transformers_and_estimators import CustomNGBRegressor, CustomTransformedTargetRegressor
+from utils.custom_transformers_and_estimators import XTransformer, YTransformer, CustomTransformedTargetRegressor, create_estimator
 from utils.metrics import ProbabilisticErrorMetrics
 
 
@@ -41,7 +41,7 @@ class PipelineConfig(BaseModel):
     Pydantic model for the configuration of the pipeline.
     """
     estimator: CustomTransformedTargetRegressor = Field(
-        default=create_estimator(model_config=ModelConfig()))
+        default=create_estimator(model_config=ModelConfig(), x_transformer=XTransformer(), y_transformer=YTransformer()))
 
     class Config:
         arbitrary_types_allowed: bool = True

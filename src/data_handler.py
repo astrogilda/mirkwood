@@ -21,18 +21,6 @@ class GalaxyProperty(str, Enum):
     DUST_MASS = "dust_mass"
 
 
-class DataFrameField(pd.DataFrame):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, value):
-        if value is not None and not isinstance(value, pd.DataFrame):
-            raise TypeError('Value must be a pandas DataFrame')
-        return parse_obj_as(pd.DataFrame, value)
-
-
 class DataSet(BaseModel):
     """
     Class to represent a dataset.
@@ -48,8 +36,8 @@ class DataSet(BaseModel):
     """
 
     name: str
-    X: Optional[DataFrameField] = None
-    y: Optional[DataFrameField] = None
+    X: Optional[pd.DataFrame] = None
+    y: Optional[pd.DataFrame] = None
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -113,7 +101,6 @@ class DataHandlerConfig(BaseModel):
     np_seed: int = 1
     eps: float = 1e-6
     mulfac: float = 1.0
-    train_data: List[str] = Field(default_factory=list)
     datasets: Dict[str, DataSet] = Field(
         default_factory=lambda: {
             'simba': DataSet(name='simba'),
@@ -157,7 +144,7 @@ class DataHandler:
         Configuration for the data handler.
     """
 
-    def __init__(self, config: DataHandlerConfig):
+    def __init__(self, config: DataHandlerConfig = DataHandlerConfig()):
         self.config = config
         np.random.seed(self.config.np_seed)
 
@@ -170,14 +157,14 @@ class DataHandler:
             'log_sfr': self.label_rev_func()[GalaxyProperty.SFR],
         }
 
-    def get_data(self, train_data: List[TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
+    def get_data(self, train_data: Union[List[TrainData], TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Load and preprocess datasets.
 
         Parameters
         ----------
-        train_data : List[str]
-            List of datasets to be used for training.
+        train_data : List[str] or str
+            List of datasets (or solitary dataset) to be used for training.
 
         Returns
         -------
@@ -187,11 +174,14 @@ class DataHandler:
         if not train_data:
             raise ValueError("No datasets specified for loading.")
 
+        if isinstance(train_data, TrainData):
+            train_data = [train_data]
+
         X_list, y_list = [], []
 
         # Load and concatenate datasets
         for key in train_data:
-            dataset = self.config.datasets[key]
+            dataset = self.config.datasets[key.value]
             if not dataset.is_loaded:
                 dataset.load()
             X_list.append(dataset.X)
@@ -218,10 +208,12 @@ class DataHandler:
             Preprocessed y vector.
         """
         log_stellar_mass = np.log10(
-            y[GalaxyProperty.STELLAR_MASS].values + self.config.eps)
-        log_dust_mass = np.log10(1 + y[GalaxyProperty.DUST_MASS]).values
-        log_metallicity = np.log10(y[GalaxyProperty.METALLICITY]).values
-        log_sfr = np.log10(1 + y[GalaxyProperty.SFR]).values
+            y[GalaxyProperty.STELLAR_MASS].values + self.config.eps)  # .reshape(-1, 1)
+        log_dust_mass = np.log10(
+            1 + y[GalaxyProperty.DUST_MASS].values)  # .reshape(-1, 1)
+        log_metallicity = np.log10(
+            y[GalaxyProperty.METALLICITY].values)  # .reshape(-1, 1)
+        log_sfr = np.log10(1 + y[GalaxyProperty.SFR].values)  # .reshape(-1, 1)
 
         dtype = np.dtype([
             ('log_stellar_mass', float),

@@ -15,7 +15,8 @@ from src.hpo_handler import HPOHandler, HPOHandlerParams, PipelineConfig
 import scipy.stats as stats
 from pydantic.fields import ModelField
 from utils.custom_cv import CustomCV
-from src.model_handler import ModelConfig, ModelHandler, XTransformer, YTransformer, create_estimator
+from src.model_handler import ModelConfig, ModelHandler
+from utils.custom_transformers_and_estimators import XTransformer, YTransformer, create_estimator
 
 
 from pydantic import BaseModel, Field, root_validator

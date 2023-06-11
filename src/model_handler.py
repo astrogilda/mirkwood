@@ -4,12 +4,11 @@ from typing import Any, List, Optional, Tuple
 from pathlib import Path
 import numpy as np
 from sklearn.compose import TransformedTargetRegressor
-from sklearn.pipeline import Pipeline
 from pydantic_numpy import NDArrayFp64
 from pydantic import BaseModel, Field, validator
 from utils.weightify import Weightify
 from utils.odds_and_ends import reshape_array
-from utils.custom_transformers_and_estimators import CustomNGBRegressor, MultipleTransformer, ReshapeTransformer, YTransformer, XTransformer, ModelConfig, CustomTransformedTargetRegressor
+from utils.custom_transformers_and_estimators import CustomNGBRegressor, MultipleTransformer, ReshapeTransformer, YTransformer, XTransformer, ModelConfig, CustomTransformedTargetRegressor, create_estimator
 from joblib import dump, load
 import shap
 from pydantic import root_validator
@@ -17,30 +16,6 @@ import warnings
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
 warnings.filterwarnings("ignore", category=NumbaPendingDeprecationWarning)
-
-
-def create_estimator(model_config: ModelConfig = ModelConfig(),
-                     x_transformer: XTransformer = XTransformer(),
-                     y_transformer: YTransformer = YTransformer()) -> TransformedTargetRegressor:
-
-    pipeline_X = Pipeline([(transformer.name, transformer.transformer)
-                          for transformer in x_transformer.transformers])
-    pipeline_y = MultipleTransformer(y_transformer.transformers)
-
-    if x_transformer.transformers:
-        feature_pipeline = Pipeline([
-            ('preprocessing', pipeline_X),
-            ('regressor', CustomNGBRegressor(**model_config.dict()))
-        ])
-    else:
-        feature_pipeline = Pipeline([
-            ('regressor', CustomNGBRegressor(**model_config.dict()))
-        ])
-
-    return CustomTransformedTargetRegressor(
-        regressor=feature_pipeline,
-        transformer=pipeline_y
-    )
 
 
 class ModelHandler(BaseModel):

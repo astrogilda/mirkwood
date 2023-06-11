@@ -203,7 +203,7 @@ for train_index, val_index in outer_cv.split(X_train_val):
         model_bs = ModelClass(**model.best_params_)
         model_bs.fit(X_bs, y_bs)
         # Make predictions for this fold 
-        y_pred = model_bs.predict(X_val_outer)
+        y_pred = model_bs.predict(X_holdout)
         fold_predictions.append(y_pred)
     
     # Aggregate the predictions from multiple models for this fold
