@@ -1,3 +1,4 @@
+from copy import deepcopy
 from sklearn.base import clone
 from sklearn.compose import TransformedTargetRegressor
 import numpy as np
@@ -126,6 +127,10 @@ class ReshapeTransformer(TransformerMixin):
         """Reshape X to target dimension and store its shape, if necessary."""
         check_is_fitted(self, "is_fitted_")
         self.shapes_.append(X.shape)
+        print(
+            f"Storing original shape before transforming using reshape_transformer = {X.shape}")
+        print(f"self.shapes_ = {self.shapes_}")
+
         if self.target_dim == 1 and len(X.shape) == 1:
             return X.reshape(-1, 1)
         elif self.target_dim == 0 and len(X.shape) == 2 and X.shape[1] == 1:
@@ -163,28 +168,29 @@ class YTransformer(BaseModel):
                                   transformer=ReshapeTransformer(target_dim=0)),
             ])
 
-        # Handle the case when transformers is a TransformerConfig instance
-        if isinstance(transformers, TransformerConfig):
-            transformers = [transformers]
-
-        # If transformers is None or empty, add ReshapeTransformer(target_dim=0).
-        if not transformers:
+        # If transformers is an empty list , add ReshapeTransformer(target_dim=0).
+        elif not transformers:
             transformers = [
                 TransformerConfig(name="reshape_transform0",
                                   transformer=ReshapeTransformer(target_dim=0))
             ]
 
         else:
-            first_transformer = transformers[0]
-            last_transformer = transformers[-1]
+            # Handle the case when transformers is a TransformerConfig instance
+            if isinstance(transformers, TransformerConfig):
+                transformers = TransformerTuple([transformers])
 
-            if not isinstance(first_transformer.transformer, ReshapeTransformer) or first_transformer.transformer.target_dim != 1:
-                transformers.insert(0, TransformerConfig(
-                    name="reshape_transform1", transformer=ReshapeTransformer(target_dim=1)))
+            else:  # the only remaining case is where transformers is a TransformerTuple
+                first_transformer = transformers[0]
+                last_transformer = transformers[-1]
 
-            if not isinstance(last_transformer.transformer, ReshapeTransformer) or last_transformer.transformer.target_dim != 0:
-                transformers.append(TransformerConfig(
-                    name="reshape_transform0", transformer=ReshapeTransformer(target_dim=0)))
+                if not isinstance(first_transformer.transformer, ReshapeTransformer) or first_transformer.transformer.target_dim != 1:
+                    transformers.insert(0, TransformerConfig(
+                        name="reshape_transform1", transformer=ReshapeTransformer(target_dim=1)))
+
+                if not isinstance(last_transformer.transformer, ReshapeTransformer) or last_transformer.transformer.target_dim != 0:
+                    transformers.append(TransformerConfig(
+                        name="reshape_transform0", transformer=ReshapeTransformer(target_dim=0)))
 
         values["transformers"] = transformers
         return values
@@ -194,49 +200,45 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
     """
     A transformer that applies a list of transformers sequentially.
     This class is for internal use and should not be instantiated directly.
-    Please use the create_estimator function instead.
+    Please use the create_estimator function, or YTransformer, instead.
 
     Parameters
     ----------
-    transformers : list of TransformerConfig
-        List of TransformerConfig to be applied sequentially.
+    y_transformer : YTransformer
     """
 
-    def __init__(self, transformers: Union[TransformerConfig, TransformerTuple, list]):
-        if isinstance(transformers, list):
-            for t in transformers:
-                if not isinstance(t, TransformerConfig):
-                    raise TypeError(
-                        f"Expected items in list to be of type TransformerConfig, got {type(t).__name__}")
+    def __init__(self, y_transformer: YTransformer):
+        if not isinstance(y_transformer, YTransformer):
+            raise ValueError(
+                f"y_transformer should be an instance of YTransformer, but got {type(y_transformer)}")
 
-        elif not isinstance(transformers, (TransformerConfig, TransformerTuple)):
-            raise TypeError(
-                f"Expected TransformerConfig or TransformerTuple or list of TransformerConfig, got {type(transformers).__name__}")
+        self.y_transformer = y_transformer
+        self.transformers = y_transformer.transformers
 
-        if isinstance(transformers, TransformerConfig):
-            transformers = [transformers]
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "_MultipleTransformer":
+        """Fit all transformers using X"""
+        if len(self.transformers) > 1:
+            first_transformer = self.transformers[0].transformer
+            print(f"First transformer is {self.transformers[0].name}")
 
-        self.transformers = [config.transformer for config in transformers]
-        self.ensure_reshape_transformer()
+            first_transformer.fit(X, y)
+            print(f"First transformer, {self.transformers[0].name}, fitted")
 
-    def ensure_reshape_transformer(self):
-        """
-        Ensure that the first transformer is ReshapeTransformer with target_dim=1
-        and the last transformer is ReshapeTransformer with target_dim=0.
-        """
-        first_transformer = self.transformers[0]
-        last_transformer = self.transformers[-1]
+            X = first_transformer.transform(X)
+            print(
+                f"shape after first transformer, {self.transformers[0].name}: {X.shape}")
 
-        if not isinstance(first_transformer, ReshapeTransformer) or first_transformer.target_dim != 1:
-            self.transformers.insert(0, ReshapeTransformer(target_dim=1))
-
-        if not isinstance(last_transformer, ReshapeTransformer) or last_transformer.target_dim != 0:
-            self.transformers.append(ReshapeTransformer(target_dim=0))
-
-    def fit(self, X: np.ndarray, y: np.ndarray = None) -> '_MultipleTransformer':
-        """Fit all transformers using X and y."""
-        for transformer in self.transformers:
+        for transformer_config in self.transformers[1:]:
+            transformer = transformer_config.transformer
             transformer.fit(X, y)
+            print(f"{transformer_config.name} fitted")
+
+        # Inverse transform back
+        if len(self.transformers) > 1:
+            X = first_transformer.inverse_transform(X)
+            print(
+                f"shape after inverse transform using first transformer, {self.transformers[0].name}: {X.shape}")
+
         self.is_fitted_ = True
         return self
 
@@ -244,7 +246,8 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         """Transform X using all transformers."""
         check_is_fitted(self, "is_fitted_")
         result = X
-        for transformer in self.transformers:
+        for transformer_config in self.transformers:
+            transformer = transformer_config.transformer
             result = transformer.transform(result)
         return result
 
@@ -252,13 +255,14 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         """Inverse transform X using all transformers."""
         check_is_fitted(self, "is_fitted_")
         result = X
-        for transformer in reversed(self.transformers):
+        for transformer_config in reversed(self.transformers):
+            transformer = transformer_config.dict()['transformer']
             result = transformer.inverse_transform(result)
         return result
 
     def get_params(self, deep=True):
         """Get parameters for this estimator."""
-        return {"transformers": self.transformers}
+        return {"y_transformer": self.y_transformer}
 
     def set_params(self, **params):
         """Set the parameters of this estimator."""
@@ -296,17 +300,49 @@ class CustomNGBRegressor(NGBRegressor):
 
 
 class CustomTransformedTargetRegressor(TransformedTargetRegressor):
-    def predict_std(self, X):
-        check_is_fitted(self)
+    def fit(self, X: np.ndarray, y: np.ndarray) -> 'CustomTransformedTargetRegressor':
 
-        X_trans = self.transformer.transform(X)
+        # Also explicitly call fit on `_MultipleTransformer`
+        self.transformer.fit(y)
+        y = self.transformer.transform(y)
+        print(f"Transformed y shape: {y.shape}")
+        print("\n\n")
+        self.regressor.fit(X, y)
+        self.regressor_ = deepcopy(self.regressor)
+        self.transformer_ = deepcopy(self.transformer)
+        return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        check_is_fitted(self, 'regressor_')
+        check_is_fitted(self, 'transformer_')
+
+        # Extract the underlying regressor
+        underlying_regressor = self.regressor_.named_steps['regressor']
+
+        # Check if predict_std method exists in the regressor
+        if hasattr(underlying_regressor, 'predict'):
+            y_pred_mean = underlying_regressor.predict(X)
+            # print(y_pred_mean)
+            # print(y_pred_mean.shape)
+            return self.transformer_.inverse_transform(y_pred_mean)
+        else:
+            raise AttributeError(
+                f"The underlying regressor does not have 'predict' method.")
+
+    def predict_std(self, X: np.ndarray) -> np.ndarray:
+        check_is_fitted(self, 'regressor_')
+        check_is_fitted(self, 'transformer_')
+
+        # X_trans = self.regressor.transform(X)
 
         # Extract the underlying regressor
         underlying_regressor = self.regressor_.named_steps['regressor']
 
         # Check if predict_std method exists in the regressor
         if hasattr(underlying_regressor, 'predict_std'):
-            y_pred_std = underlying_regressor.predict_std(X_trans)
+            y_pred_std = underlying_regressor.predict_std(X)
+            # print(y_pred_std)
+            # print(y_pred_std.shape)
             return self.transformer_.inverse_transform(y_pred_std)
         else:
             raise AttributeError(
@@ -328,7 +364,7 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                           for transformer in x_transformer.transformers])
-    pipeline_y = _MultipleTransformer(y_transformer.transformers)
+    pipeline_y = _MultipleTransformer(y_transformer=y_transformer)
 
     if x_transformer.transformers:
         feature_pipeline = Pipeline([
@@ -344,122 +380,3 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
         regressor=feature_pipeline,
         transformer=pipeline_y
     )
-
-
-'''
-
-
-from sklearn.datasets import load_diabetes
-from sklearn.preprocessing import StandardScaler, RobustScaler, FunctionTransformer
-from ngboost.distns import Normal
-from ngboost.scores import LogScore
-from sklearn.pipeline import Pipeline
-from sklearn.compose import TransformedTargetRegressor
-import numpy as np
-from utils.custom_transformers_and_estimators import TransformerTuple, TransformerConfig, XTransformer, YTransformer, _MultipleTransformer, ReshapeTransformer, CustomNGBRegressor, CustomTransformedTargetRegressor, create_estimator
-from ngboost import NGBRegressor
-from utils.weightify import Weightify
-
-from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
-from src.model_handler import ModelConfig
-from hypothesis.strategies import floats, lists, sampled_from, just, one_of
-import pytest
-from hypothesis import given, assume, settings
-from pydantic import ValidationError
-import numpy as np
-from typing import List
-import pandas as pd
-
-# Load the data
-X_y = DataHandler().get_data(train_data=TrainData.SIMBA)
-X, y = np.log10(1+X_y[0].values), X_y[1]['log_stellar_mass']
-#X, y = load_diabetes(return_X_y=True)
-
-print(X.shape, y.shape)
-
-# Define your transformations
-transformations_X = XTransformer(transformers=TransformerTuple([
-    TransformerConfig(name="standard_scaler", transformer=StandardScaler()),
-    TransformerConfig(name="robust_scaler", transformer=RobustScaler())
-]))
-transformations_X = XTransformer(transformation=None)
-
-
-transformations_Y = YTransformer(transformers=TransformerTuple([
-    TransformerConfig(name="standard_scaler", transformer=StandardScaler()),
-    TransformerConfig(name="reshape_transform0", transformer=ReshapeTransformer()),
-]))
-
-# Create pipelines for X and y
-pipeline_X = Pipeline([(transformer.name, transformer.transformer)
-                          for transformer in transformations_X.transformers])
-pipeline_y = _MultipleTransformer(transformations_Y.transformers)
-
-
-if transformations_X.transformers:
-    feature_pipeline = Pipeline([
-        ('preprocessing', pipeline_X),
-        ('regressor', CustomNGBRegressor(Dist=Normal, Score=LogScore))
-    ])
-else:
-    feature_pipeline = Pipeline([
-        ('regressor', CustomNGBRegressor(Dist=Normal, Score=LogScore))
-    ])
-
-
-model = CustomTransformedTargetRegressor(
-    regressor=feature_pipeline,
-    transformer=pipeline_y
-)
-
-# Sequentially transform y
-y_transformed = pipeline_y.fit_transform(y)
-
-y_transformed.shape
-y.shape
-X.shape
-
-model.fit(X, y)
-
-y_pred_mean = model.predict(X)
-
-y_pred_std = model.predict_std(X)
-
-
-# Initialize your Weightify transformer
-weightify_transformer = Weightify()
-
-# Calculate weights for y
-y_weights = weightify_transformer.fit_transform(y)
-
-# Fit the model
-model.fit(X, y, regressor__sample_weight=y_weights)
-
-y_pred_mean_weighted = model.predict(X)
-
-y_pred_std_weighted = model.predict_std(X)
-
-
-
-
-
-
-# Sequentially transform y
-y_transformed = pipeline_y.fit_transform(y)
-y_transformed = pipeline_y.transform(y)
-
-# Initialize your Weightify transformer
-weightify_transformer = Weightify()
-
-# Calculate weights for y
-y_train_weights = weightify_transformer.fit_transform(y_train_transformed)
-y_val_weights = weightify_transformer.transform(y_val_transformed)
-
-# Fit the model
-model.fit(X_train, y_train, regressor__sample_weight=y_train_weights, regressor__X_val=X_val,
-          regressor__y_val=y_val, regressor__val_sample_weight=y_val_weights)
-
-# Make predictions
-# The predictions are automatically inverse-transformed by TransformedTargetRegressor
-y_test_pred = model.predict(X_test)
-'''

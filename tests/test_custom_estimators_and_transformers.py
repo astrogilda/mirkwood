@@ -1,4 +1,3 @@
-from utils.custom_transformers_and_estimators import XTransformer, YTransformer
 from numpy.testing import assert_almost_equal
 from sklearn.exceptions import NotFittedError
 import numpy as np
@@ -11,6 +10,7 @@ from ngboost.scores import LogScore
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.tree import DecisionTreeRegressor
 from pydantic.error_wrappers import ValidationError
+from utils.custom_transformers_and_estimators import _MultipleTransformer
 
 
 @st.composite
@@ -128,7 +128,7 @@ def test_reshape_transformer_inverse(X1d, X2d):
 @settings(
     deadline=None, max_examples=10
 )
-def test_custom_ngb_regressor_fit_and_predict(X, y):
+def test_customngbregressor_fit_and_predict(X, y):
     """Test fitting and predicting of the CustomNGBRegressor class"""
     X = np.nan_to_num(X)  # replace infinities with large finite numbers
     y = np.nan_to_num(y)  # replace infinities with large finite numbers
@@ -139,34 +139,6 @@ def test_custom_ngb_regressor_fit_and_predict(X, y):
 
     assert isinstance(preds, np.ndarray)
     assert preds.shape[0] == X.shape[0]
-
-
-@given(array_2d(), array_1d())
-@settings(
-    deadline=None, max_examples=100
-)
-def test_custom_transformed_target_regressor(X, y):
-    model_config = ModelConfig()
-    x_transformer = XTransformer()
-    y_transformer = YTransformer()
-    ttr = create_estimator(model_config=model_config,
-                           x_transformer=x_transformer,
-                           y_transformer=y_transformer)
-    ttr.fit(X, y)
-    y_pred = ttr.predict(X)
-    # Check shape of predicted y
-    assert y_pred.shape == y.flatten().shape
-    # Testing predict_std method
-    y_pred_std = ttr.predict_std(X)
-    # Check shape of predicted std
-    assert y_pred_std.shape == y.flatten().shape
-
-
-def test_create_estimator_None():
-    """Test create_estimator's response to None input"""
-    # This should not raise an error and use default parameters instead
-    ttr = create_estimator(None, None, None)
-    assert isinstance(ttr, CustomTransformedTargetRegressor)
 
 
 @given(array_2d())
@@ -232,13 +204,26 @@ def test_ytransformer_failing():
         y_transformer.transformers[0].transformer.transform(array_1d())
 
 
-'''
 def test_multiple_transformer_wrong_input():
-    """Test MultipleTransformer's response to incorrect transformer input"""
-    # This should raise a TypeError because MultipleTransformer expects instances of TransformerMixin
-    with pytest.raises(TypeError):
+    """Test MultipleTransformer's response to invalid input -- single transformer"""
+    # This should raise a TypeError because MultipleTransformer expects instances of YTransformer
+    with pytest.raises(ValueError):
         _MultipleTransformer([StandardScaler(
-        ), f"Expected TransformerConfig or TransformerTuple, got {type(StandardScaler()).__name__}"])
+        ), f"y_transformer should be an instance of YTransformer, but got {type(StandardScaler()).__name__}"])
+    with pytest.raises(ValueError):
+        _MultipleTransformer([
+            TransformerConfig(name="standard_scaler", transformer=StandardScaler()), f"y_transformer should be an instance of YTransformer, but got {type(TransformerConfig()).__name__}"])
+
+
+def test_multiple_transformer_wrong_input_list():
+    """Test MultipleTransformer's response to invalid input -- list of transformers"""
+    stand_scaler = StandardScaler()
+    func_trans = FunctionTransformer(np.log1p)
+    with pytest.raises(ValueError):
+        _MultipleTransformer([
+            stand_scaler,
+            func_trans
+        ])
 
 
 @given(array_1d())
@@ -246,31 +231,56 @@ def test_multiple_transformer(X):
     """Test the functionality of the MultipleTransformer class"""
     stand_scaler = StandardScaler()
     func_trans = FunctionTransformer(np.log1p)
-    multi_trans = _MultipleTransformer([
+    multi_trans = _MultipleTransformer(YTransformer(transformers=[
         TransformerConfig(name="standard_scaler", transformer=stand_scaler),
-        TransformerConfig(name="func_trans", transformer=func_trans)
-    ])
+    ]))
+    # TransformerConfig(name="func_transformer", transformer=func_trans)
     multi_trans.fit(X)
     X_trans = multi_trans.transform(X)
     assert not np.array_equal(X, X_trans)
     X_inv = multi_trans.inverse_transform(X_trans)
-    assert np.array_equal(X, X_inv)
+    np.testing.assert_almost_equal(X, X_inv)
 
 
-def test_multiple_transformer_list():
-    """Test MultipleTransformer's response to invalid input -- list of transformers"""
-    stand_scaler = StandardScaler()
-    func_trans = FunctionTransformer(np.log1p)
-    with pytest.raises(TypeError):
-        _MultipleTransformer([
-            stand_scaler,
-            func_trans
-        ])
+@given(array_2d(), array_1d())
+@settings(
+    deadline=None, max_examples=100
+)
+def test_create_estimator(X, y):
+    model_config = ModelConfig()
+    x_transformer = XTransformer()
+    y_transformer = YTransformer()
+    ttr = create_estimator(model_config=model_config,
+                           x_transformer=x_transformer,
+                           y_transformer=y_transformer)
+    assert isinstance(ttr, CustomTransformedTargetRegressor)
+
+    ttr.fit(X, y)
+    y_pred = ttr.predict(X)
+    # Check shape of predicted y
+    assert y_pred.shape == y.flatten().shape
+    # Testing predict_std method
+    y_pred_std = ttr.predict_std(X)
+    # Check shape of predicted std
+    assert y_pred_std.shape == y.flatten().shape
 
 
-def test_multiple_transformer_invalid():
-    """Test MultipleTransformer's response to invalid input -- single transformer"""
-    stand_scaler = StandardScaler()
-    with pytest.raises(TypeError):
-        _MultipleTransformer(stand_scaler)
-'''
+@given(array_2d(), array_1d())
+@settings(
+    deadline=None, max_examples=100
+)
+def test_create_estimator_None(X, y):
+    """Test create_estimator's response to None input"""
+    # This should not raise an error and use default parameters instead
+    ttr = create_estimator(None, None, None)
+    assert isinstance(ttr, CustomTransformedTargetRegressor)
+
+    print(X.shape, y.shape)
+    ttr.fit(X, y)
+    y_pred = ttr.predict(X)
+    # Check shape of predicted y
+    assert y_pred.shape == y.flatten().shape
+    # Testing predict_std method
+    y_pred_std = ttr.predict_std(X)
+    # Check shape of predicted std
+    assert y_pred_std.shape == y.flatten().shape
