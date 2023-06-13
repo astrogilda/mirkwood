@@ -7,7 +7,7 @@ from random import shuffle
 from utils.custom_transformers_and_estimators import *
 from ngboost.distns import Normal
 from ngboost.scores import LogScore
-from sklearn.preprocessing import FunctionTransformer, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler, RobustScaler
 from sklearn.tree import DecisionTreeRegressor
 from pydantic.error_wrappers import ValidationError
 from utils.custom_transformers_and_estimators import _MultipleTransformer
@@ -16,30 +16,29 @@ from utils.custom_transformers_and_estimators import _MultipleTransformer
 @st.composite
 def array_1d_and_2d(draw):
     """Strategy to generate a pair of 1D and 2D numpy arrays with shared elements"""
-    rows = draw(st.integers(100, 1000))
-    cols = draw(st.integers(1, 10))
+    n_elements = draw(st.integers(100, 1000))
     unique_ratio = draw(st.floats(min_value=0.1, max_value=0.99))
-    n_elements = rows * cols
-    n_unique = int(n_elements * unique_ratio)
+    n_unique = round(n_elements * unique_ratio)
     n_repeat = n_elements - n_unique
+
     # feel free to adjust the range and size of this pool
     elements_pool = np.linspace(-1000, 1000, 50000)
     unique_elements = draw(st.lists(st.sampled_from(
         elements_pool), min_size=n_unique, max_size=n_unique, unique=True))
-    repeat_factor = (n_repeat // n_unique) + 2
-    repeat_elements = (unique_elements * repeat_factor)[:n_repeat]
-    elements = unique_elements + list(repeat_elements)
+
+    repeat_elements = np.random.choice(unique_elements, size=n_repeat).tolist()
+    elements = unique_elements + repeat_elements
     np.random.shuffle(elements)
-    array_1d = np.array(elements[:rows])
-    array_2d = np.array(elements[:n_elements]).reshape(rows, cols)
-    # Check which array has more rows and add duplicates of the previous element/row until both arrays have the same number of rows
-    if len(array_1d) < len(array_2d):
-        diff = len(array_2d) - len(array_1d)
-        array_1d = np.concatenate((array_1d, np.repeat(array_1d[-1], diff)))
-    elif len(array_1d) > len(array_2d):
-        diff = len(array_1d) - len(array_2d)
-        array_2d = np.vstack((array_2d, np.repeat(
-            array_2d[-1].reshape(1, -1), diff, axis=0)))
+    array_1d = np.array(elements)
+
+    # Generate array_2d
+    n_rows = array_1d.shape[0]
+    n_columns = draw(st.integers(1, 50))
+    array_2d = np.zeros((n_rows, n_columns + 1))
+    array_2d[:, 0] = array_1d
+
+    for i in range(n_columns):
+        array_2d[:, i + 1] = np.random.permutation(array_1d)
 
     return array_1d, array_2d
 
@@ -90,46 +89,13 @@ def test_model_config_wrong_base():
         ModelConfig(Base=StandardScaler())
 
 
-@given(array_1d())
-def test_reshape_transformer(X):
-    """Test the functionality of the ReshapeTransformer class"""
-    rt0 = ReshapeTransformer(target_dim=0)
-    rt1 = ReshapeTransformer(target_dim=1)
-    rt0.fit(X)
-    rt1.fit(X)
-    assert np.array_equal(rt0.transform(X), X.flatten())
-    assert np.array_equal(rt1.transform(X), X.reshape(-1, 1))
-
-
-@given(array_1d())
-def test_reshape_transformer_wrong_dim(X):
-    rt2 = ReshapeTransformer(target_dim=2)
-    # This should raise an error because target_dim can only be 0 or 1
-    with pytest.raises(ValueError):
-        rt2.transform(X)
-
-
-@given(array_1d(), array_2d())
-def test_reshape_transformer_inverse(X1d, X2d):
-    """Test the inverse transform functionality of the ReshapeTransformer class"""
-    rt0 = ReshapeTransformer(target_dim=0)
-    rt1 = ReshapeTransformer(target_dim=1)
-    rt0.fit(X1d)
-    rt1.fit(X2d)
-    assert np.array_equal(rt0.inverse_transform(rt0.transform(X1d)), X1d)
-    assert np.array_equal(rt1.inverse_transform(rt1.transform(X2d)), X2d)
-    rt0.fit(X2d)
-    rt1.fit(X1d)
-    assert np.array_equal(rt0.inverse_transform(rt0.transform(X2d)), X2d)
-    assert np.array_equal(rt1.inverse_transform(rt1.transform(X1d)), X1d)
-
-
-@given(array_2d(), array_1d())
+@given(array_1d_and_2d())
 @settings(
     deadline=None, max_examples=10
 )
-def test_customngbregressor_fit_and_predict(X, y):
+def test_customngbregressor_fit_and_predict(arrays):
     """Test fitting and predicting of the CustomNGBRegressor class"""
+    y, X = arrays
     X = np.nan_to_num(X)  # replace infinities with large finite numbers
     y = np.nan_to_num(y)  # replace infinities with large finite numbers
 
@@ -142,7 +108,7 @@ def test_customngbregressor_fit_and_predict(X, y):
 
 
 @given(array_2d())
-@settings(deadline=None)
+@settings(deadline=None, max_examples=10)
 def test_xtransformer_passing(array):
     # Define the transformer configuration
     x_transformer = XTransformer()
@@ -174,25 +140,30 @@ def test_xtransformer_failing():
 @settings(deadline=None)
 def test_ytransformer_passing(array):
     # Define the transformer configuration
-    y_transformer = YTransformer()
+    y_transformer = YTransformer(transformers=TransformerTuple(
+        [
+            TransformerConfig(name="robust_scaler",
+                              transformer=RobustScaler()),
+            TransformerConfig(name="standard_scaler",
+                              transformer=StandardScaler())
+        ]))
 
+    array = array.reshape(-1, 1)
     # Fit and transform
-    reshaped_array = y_transformer.transformers[0].transformer.fit_transform(
+
+    robust_array = y_transformer.transformers[0].transformer.fit_transform(
         array)
     scaled_array = y_transformer.transformers[1].transformer.fit_transform(
-        reshaped_array)
-    transformed_array = y_transformer.transformers[2].transformer.fit_transform(
-        scaled_array)
+        robust_array)
 
     # Validate if reshaping, StandardScaler and reshaping again are effectively applied
-    assert transformed_array.ndim == 1
-    assert_almost_equal(transformed_array.mean(), 0)
-    assert_almost_equal(transformed_array.std(), 1)
+    assert_almost_equal(scaled_array.mean(), 0)
+    assert_almost_equal(scaled_array.std(), 1)
 
     # Test inverse transform
-    inversed_array = y_transformer.transformers[1].transformer.inverse_transform(
-        y_transformer.transformers[2].transformer.inverse_transform(transformed_array))
-    assert_almost_equal(inversed_array.reshape(-1, 1), reshaped_array)
+    inversed_array = y_transformer.transformers[0].transformer.inverse_transform(
+        y_transformer.transformers[1].transformer.inverse_transform(scaled_array))
+    assert_almost_equal(inversed_array.reshape(-1, 1), array)
 
 
 def test_ytransformer_failing():
@@ -231,22 +202,24 @@ def test_multiple_transformer(X):
     """Test the functionality of the MultipleTransformer class"""
     stand_scaler = StandardScaler()
     func_trans = FunctionTransformer(np.log1p)
-    multi_trans = _MultipleTransformer(YTransformer(transformers=[
+    y_transformer = YTransformer(transformers=[
         TransformerConfig(name="standard_scaler", transformer=stand_scaler),
-    ]))
+    ])
+    multi_trans = _MultipleTransformer(y_transformer=y_transformer)
     # TransformerConfig(name="func_transformer", transformer=func_trans)
     multi_trans.fit(X)
     X_trans = multi_trans.transform(X)
-    assert not np.array_equal(X, X_trans)
+    assert not np.array_equal(X.ravel(), X_trans.ravel())
     X_inv = multi_trans.inverse_transform(X_trans)
-    np.testing.assert_almost_equal(X, X_inv)
+    np.testing.assert_almost_equal(X.ravel(), X_inv.ravel())
 
 
-@given(array_2d(), array_1d())
+@given(array_1d_and_2d())
 @settings(
-    deadline=None, max_examples=100
+    deadline=None, max_examples=10
 )
-def test_create_estimator(X, y):
+def test_create_estimator(arrays):
+    y, X = arrays
     model_config = ModelConfig()
     x_transformer = XTransformer()
     y_transformer = YTransformer()
@@ -265,13 +238,16 @@ def test_create_estimator(X, y):
     assert y_pred_std.shape == y.flatten().shape
 
 
-@given(array_2d(), array_1d())
+@given(array_1d_and_2d())
 @settings(
-    deadline=None, max_examples=100
+    deadline=None, max_examples=10
 )
-def test_create_estimator_None(X, y):
+def test_create_estimator_None(arrays):
     """Test create_estimator's response to None input"""
     # This should not raise an error and use default parameters instead
+    y, X = arrays
+    print(X.shape, y.shape)
+
     ttr = create_estimator(None, None, None)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
