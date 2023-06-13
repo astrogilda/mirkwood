@@ -155,5 +155,4 @@ make_plots_optimized.py
 
 
 # ignore these specific files
-utils/custom_pydantic_classes.py
 utils/logger.py

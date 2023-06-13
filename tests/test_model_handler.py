@@ -13,17 +13,6 @@ os.environ[
 ] = "true"
 
 
-@given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=1))
-def test_reshape_array(test_list: List[float]):
-    """
-    Test the _reshape_array method using hypothesis for property based testing.
-    """
-    model_handler = ModelHandler(x=np.array([1, 2, 3]), y=np.array([1, 2, 3]))
-    array = np.array(test_list)
-    reshaped = model_handler._reshape_array(array)
-    assert reshaped.shape == (len(test_list),)
-
-
 @pytest.fixture
 def dummy_model_handler():
     """

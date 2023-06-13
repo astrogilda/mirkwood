@@ -7,7 +7,7 @@ from sklearn.compose import TransformedTargetRegressor
 from pydantic_numpy import NDArrayFp64
 from pydantic import BaseModel, Field, validator
 from utils.weightify import Weightify
-from utils.odds_and_ends import reshape_array
+from utils.odds_and_ends import reshape_to_1d_array, reshape_to_column_array
 from utils.custom_transformers_and_estimators import ModelConfig, create_estimator
 from joblib import dump, load
 import shap
@@ -60,7 +60,7 @@ class ModelHandler(BaseModel):
             y_train) if weight_flag else np.ones_like(y_train)
         val_weights = weightifier.transform(
             y_val) if weight_flag and y_val is not None else None
-        return reshape_array(train_weights), reshape_array(val_weights)
+        return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights)
 
     def fit(self) -> None:
         if self.fitting_mode:
@@ -93,9 +93,9 @@ class ModelHandler(BaseModel):
                     "No file path provided. Using the default estimator.")
 
     def predict(self, X_test: Optional[np.ndarray], return_bounds: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        predicted_mean = reshape_array(self.estimator.predict(
+        predicted_mean = reshape_to_1d_array(self.estimator.predict(
             X_test if X_test is not None else self.X_val))
-        predicted_std = reshape_array(self.estimator.regressor_.named_steps['regressor'].predict_std(
+        predicted_std = reshape_to_1d_array(self.estimator.regressor_.named_steps['regressor'].predict_std(
             X_test if X_test is not None else self.X_val)) if return_bounds else None
         return predicted_mean, predicted_std
 
