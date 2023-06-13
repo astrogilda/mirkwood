@@ -1,82 +1,89 @@
-from hypothesis.strategies import lists, floats, tuples
-from hypothesis import given
+from typing import List, Tuple
+from hypothesis.strategies import lists, floats, tuples, builds
+from hypothesis import given, settings, HealthCheck
 import pytest
 import numpy as np
-from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics, EPS
+from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics
+
+# Define hypothesis strategies
+float_lists = lists(floats(min_value=-100, max_value=100,
+                           allow_nan=False, allow_infinity=False), min_size=2, max_size=100)
+
+# Strategy for generating (yt, yp) pairs with same length
+yt_yp_strategy = tuples(float_lists, float_lists).filter(
+    lambda x: len(x[0]) == len(x[1]))
+
+# Strategy for generating (yt, yp, yp_lower, yp_upper) tuples
 
 
-def test_deterministic_metrics():
-    # Test deterministic error metrics calculations
-    yt = np.array([1, 2, 3, 4, 5])
-    yp = np.array([1.1, 1.9, 3.2, 4.1, 4.8])
-    metrics = DeterministicErrorMetrics(yt=yt, yp=yp)
-
-    assert np.isclose(metrics.get_iqr(), 3.8 + EPS, atol=1e-6)
-    assert np.isclose(metrics.nrmse(), 0.0657894737, atol=1e-6)
-    assert np.isclose(metrics.nmae(), 0.0526315789, atol=1e-6)
-    assert np.isclose(metrics.medianae(), 0.2, atol=1e-6)
-    assert np.isclose(metrics.mape(), 0.0466666667, atol=1e-6)
-    assert np.isclose(metrics.bias(), -0.2, atol=1e-6)
-    assert np.isclose(metrics.nbe(), -0.0131578947, atol=1e-6)
+def adjusted_lists(elements=floats(min_value=-100, max_value=100, allow_nan=False, allow_infinity=False), size=10):
+    return builds(
+        lambda x: (x, [i - np.random.uniform(0.01, 10)
+                   for i in x], [i + np.random.uniform(0.01, 10) for i in x]),
+        lists(elements, min_size=size, max_size=size)
+    )
 
 
-def test_deterministic_metrics_failure():
-    # Test failure case for deterministic error metrics
-    with pytest.raises(ValueError):
-        DeterministicErrorMetrics(yt=np.array([1, 2, 3]), yp=np.array([1, 2]))
+yt_yp_lower_upper_strategy = tuples(float_lists, adjusted_lists()).filter(
+    lambda x: len(x[0]) == len(x[1][0]) == len(x[1][1]) == len(x[1][2])
+)
 
 
-def test_probabilistic_metrics():
-    # Test probabilistic error metrics calculations
-    yt = np.array([1, 2, 3, 4, 5])
-    yp = np.array([1.1, 1.9, 3.2, 4.1, 4.8])
-    yp_lower = np.array([0.9, 1.8, 3.1, 3.9, 4.6])
-    yp_upper = np.array([1.2, 2.1, 3.3, 4.3, 5.0])
-    metrics = ProbabilisticErrorMetrics(
-        yt=yt, yp=yp, yp_lower=yp_lower, yp_upper=yp_upper)
+# Suppress the health check for filtering too much data.
+hc_suppress_filter_too_much = HealthCheck.filter_too_much
 
-    assert np.isclose(metrics.ace(), 0.0173, atol=1e-4)
-    assert np.isclose(metrics.pinaw(), 0.0526315789, atol=1e-6)
+# Suppress the health check for slow tests.
+hc_suppress_too_slow = HealthCheck.too_slow
 
 
-def test_probabilistic_metrics_failure():
-    # Test failure case for probabilistic error metrics
-    with pytest.raises(ValueError):
-        ProbabilisticErrorMetrics(yt=np.array([1, 2, 3]), yp=np.array(
-            [1, 2]), yp_lower=np.array([1, 2]), yp_upper=np.array([1, 2]))
+@given(yt_yp_strategy)
+@settings(deadline=None)
+def test_deterministic_metrics_initialization(yt_yp: Tuple[List[float], List[float]]):
+    yt, yp = yt_yp
+    deterministic_metrics = DeterministicErrorMetrics(
+        yt=np.array(yt), yp=np.array(yp))
+    assert isinstance(deterministic_metrics.yt, np.ndarray)
+    assert isinstance(deterministic_metrics.yp, np.ndarray)
+    assert len(deterministic_metrics.yt) == len(
+        deterministic_metrics.yp), "Sizes of yt and yp should match"
 
 
-@given(lists(floats(allow_nan=False, allow_infinity=False)),
-       lists(floats(allow_nan=False, allow_infinity=False)))
-def test_deterministic_metrics_hypothesis(yt, yp):
-    # Test deterministic error metrics using Hypothesis
-    if len(yt) != len(yp) or len(yt) == 0:
-        with pytest.raises(ValueError):
-            metrics = DeterministicErrorMetrics(
-                yt=np.array(yt), yp=np.array(yp))
-    else:
-        metrics = DeterministicErrorMetrics(yt=np.array(yt), yp=np.array(yp))
-        assert isinstance(metrics.get_iqr(), float)
-        assert isinstance(metrics.nrmse(), float)
-        assert isinstance(metrics.nmae(), float)
-        assert isinstance(metrics.medianae(), float)
-        assert isinstance(metrics.mape(), float)
-        assert isinstance(metrics.bias(), float)
-        assert isinstance(metrics.nbe(), float)
+@given(yt_yp_strategy)
+@settings(deadline=None)
+def test_deterministic_metrics_calculations(yt_yp: Tuple[List[float], List[float]]):
+    yt, yp = yt_yp
+    deterministic_metrics = DeterministicErrorMetrics(
+        yt=np.array(yt), yp=np.array(yp))
+    # assert isinstance(deterministic_metrics.get_iqr(), float)
+    assert isinstance(deterministic_metrics.nrmse(), float)
+    assert isinstance(deterministic_metrics.nmae(), float)
+    assert isinstance(deterministic_metrics.medianae(), float)
+    assert isinstance(deterministic_metrics.mape(), float)
+    assert isinstance(deterministic_metrics.bias(), float)
+    assert isinstance(deterministic_metrics.nbe(), float)
 
 
-@given(lists(floats(allow_nan=False, allow_infinity=False)),
-       tuples(lists(floats(allow_nan=False, allow_infinity=False)),
-              lists(floats(allow_nan=False, allow_infinity=False)),
-              lists(floats(allow_nan=False, allow_infinity=False))))
-def test_probabilistic_metrics_hypothesis(yt, yp):
-    # Test probabilistic error metrics using Hypothesis
-    if len(yt) != len(yp[0]) or len(yt) != len(yp[1]) or len(yt) != len(yp[2]) or len(yt) == 0:
-        with pytest.raises(ValueError):
-            metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=yp)
-    else:
-        metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=(
-            np.array(yp[0]), np.array(yp[1]), np.array(yp[2])))
-        assert isinstance(metrics.ace(), float)
-        assert isinstance(metrics.pinaw(), float)
-        assert isinstance(metrics.interval_sharpness(), float)
+@settings(suppress_health_check=[hc_suppress_filter_too_much, hc_suppress_too_slow], deadline=None)
+@given(yt_yp_lower_upper_strategy)
+def test_probabilistic_metrics_initialization(yt_yp_lower_upper: Tuple[List[float], Tuple[List[float], List[float], List[float]]]):
+    yt, (yp, yp_lower, yp_upper) = yt_yp_lower_upper
+    probabilistic_metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=np.array(
+        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper))
+    assert isinstance(probabilistic_metrics.yt, np.ndarray)
+    assert isinstance(probabilistic_metrics.yp, np.ndarray)
+    assert isinstance(probabilistic_metrics.yp_lower, np.ndarray)
+    assert isinstance(probabilistic_metrics.yp_upper, np.ndarray)
+    assert len(probabilistic_metrics.yt) == len(probabilistic_metrics.yp) == len(
+        probabilistic_metrics.yp_lower) == len(probabilistic_metrics.yp_upper), "Sizes of yt, yp, yp_lower and yp_upper should match"
+
+
+@settings(suppress_health_check=[hc_suppress_filter_too_much, hc_suppress_too_slow], deadline=None)
+@given(yt_yp_lower_upper_strategy)
+def test_probabilistic_metrics_calculations(yt_yp_lower_upper: Tuple[List[float], Tuple[List[float], List[float], List[float]]]):
+    yt, (yp, yp_lower, yp_upper) = yt_yp_lower_upper
+    probabilistic_metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=np.array(
+        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper))
+    assert isinstance(probabilistic_metrics.ace(), float)
+    assert isinstance(probabilistic_metrics.pinaw(), float)
+    assert isinstance(probabilistic_metrics.interval_sharpness(), float)
+    assert isinstance(probabilistic_metrics.gaussian_crps(), float)

@@ -17,9 +17,9 @@ def test_hpo_handler(n_trials: int):
     X_train, X_val, y_train, y_val = train_test_split(X, y, random_state=0)
 
     param_grid = ParamGridConfig(
-        learning_rate=optuna.distributions.UniformDistribution(0.01, 0.3),
-        n_estimators=optuna.distributions.IntUniformDistribution(100, 1000),
-        minibatch_frac=optuna.distributions.UniformDistribution(0.1, 1.0),
+        learning_rate=optuna.distributions.FloatDistribution(0.01, 0.3),
+        n_estimators=optuna.distributions.IntDistribution(100, 1000),
+        minibatch_frac=optuna.distributions.FloatDistribution(0.1, 1.0),
     )
 
     params = HPOHandlerParams(
@@ -39,9 +39,9 @@ def test_hpo_handler_predict():
     X_train, X_val, y_train, y_val = train_test_split(X, y, random_state=0)
 
     param_grid = ParamGridConfig(
-        learning_rate=optuna.distributions.UniformDistribution(0.01, 0.3),
-        n_estimators=optuna.distributions.IntUniformDistribution(100, 1000),
-        minibatch_frac=optuna.distributions.UniformDistribution(0.1, 1.0),
+        learning_rate=optuna.distributions.FloatDistribution(0.01, 0.3),
+        n_estimators=optuna.distributions.IntDistribution(100, 1000),
+        minibatch_frac=optuna.distributions.FloatDistribution(0.1, 1.0),
     )
 
     params = HPOHandlerParams(

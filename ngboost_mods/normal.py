@@ -68,9 +68,7 @@ class Normal(RegressionDistn):
         super().__init__(params)
         self.loc = params[0]
         # Sankalp: adding the clipping line on 10/16/2020.
-        q = np.clip(params[1], a_min=-1e1, a_max=1e1)
-        self.scale = np.exp(q)
-        # Sankalp: adding the clipping line on 10/16/2020.
+        params[1] = np.clip(params[1], a_min=-1e1, a_max=1e1)
         self.scale = np.exp(params[1])
         self.var = self.scale**2
         self.dist = dist(loc=self.loc, scale=self.scale)

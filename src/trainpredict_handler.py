@@ -1,5 +1,4 @@
 from src.data_handler import GalaxyProperty
-from pydantic_numpy import NDArrayFp64
 from pydantic import BaseModel, Field, validator, PrivateAttr, root_validator
 from typing import Optional, List, Tuple, Union, Any
 from sklearn.utils import check_X_y
@@ -10,7 +9,7 @@ from src.bootstrap_handler import BootstrapHandler
 from src.model_handler import ModelHandler
 from pydantic_numpy import NDArrayFp64
 from pathlib import Path
-from data_handler import GalaxyProperty, DataHandler
+from src.data_handler import GalaxyProperty, DataHandler
 from src.hpo_handler import HPOHandler, HPOHandlerParams, PipelineConfig
 import scipy.stats as stats
 from pydantic.fields import ModelField
@@ -18,34 +17,8 @@ from utils.custom_cv import CustomCV
 from src.model_handler import ModelConfig, ModelHandler
 from utils.custom_transformers_and_estimators import XTransformer, YTransformer, create_estimator
 
-
+import pandas as pd
 from pydantic import BaseModel, Field, root_validator
-
-
-class TrainPredictHandler(BaseModel):
-    X: NDArrayFp64
-    X_noise_percent: float = Field(default=None, ge=0, le=1)
-    # other fields...
-
-    # root validator decorator
-    @root_validator(pre=True)
-    def apply_noisy_X(cls, values: dict) -> dict:
-        # Assuming create_noisy_X is a static method or a class method
-        # If not, we need to create an instance of the class to call this method
-        # which is a bit odd to do in a validator.
-        # But it's technically possible: `cls().create_noisy_X()`
-        if 'X' in values and values.get('X_noise_percent') is not None:
-            values['X'] = cls.create_noisy_X(
-                values['X'], values['X_noise_percent'])
-        return values
-
-    @staticmethod
-    def create_noisy_X(X: np.ndarray, X_noise_percent: float) -> np.ndarray:
-        noise = X_noise_percent * np.random.default_rng().normal(size=(X.shape))
-        X_noisy_nonlog = (10**X - 1)*(1+noise)
-        X_noisy = np.log10(1 + np.clip(a=X_noisy_nonlog, a_min=0., a_max=None))
-        return X_noisy
-    # other methods...
 
 
 class TrainPredictHandler(BaseModel):
@@ -54,8 +27,8 @@ class TrainPredictHandler(BaseModel):
     cross-validation, bootstrapping, and parallel computing.
     """
 
-    X: NDArrayFp64
-    y: NDArrayFp64
+    X: np.ndarray
+    y: np.ndarray
     confidence_level: float = Field(0.67, gt=0, le=1)
     n_folds_outer: int = Field(default=5, ge=2, le=20)
     n_folds_inner: int = Field(default=5, ge=2, le=20)
@@ -155,13 +128,15 @@ class TrainPredictHandler(BaseModel):
         estimator = create_estimator(
             model_config=self.model_config, x_transformer=self.X_transformer, y_transformer=self.y_transformer)
 
-        yval_lists = [np.array([]) for _ in range(
-            7)]  # 7 different predictions returned
+        metrics_df = pd.DataFrame()
 
         cv_outer = CustomCV(self.y, n_folds=self.n_folds_outer).get_indices()
         cv_inner = CustomCV(self.y, n_folds=self.n_folds_inner).get_indices()
 
         for i, (train_idx, val_idx) in enumerate(cv_outer):
+            yval_lists = [np.array([]) for _ in range(
+                7)]  # 7 different predictions returned
+
             # ensure the arrays/lists are not empty
             assert len(train_idx) > 0, "Training index array is empty"
             assert len(val_idx) > 0, "Validation index array is empty"

@@ -1,5 +1,4 @@
 from copy import deepcopy
-from sklearn.base import clone
 from sklearn.compose import TransformedTargetRegressor
 import numpy as np
 from ngboost import NGBRegressor

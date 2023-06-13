@@ -27,13 +27,15 @@ class ParamGridConfig(BaseModel):
     """
     Pydantic model for the configuration of the parameter grid.
     """
-    regressor__regressor__learning_rate: optuna.distributions.BaseDistribution = optuna.distributions.UniformDistribution(
+    regressor__regressor__learning_rate: optuna.distributions.BaseDistribution = optuna.distributions.FloatDistribution(
         0.01, 0.3)
-    regressor__regressor__n_estimators: optuna.distributions.BaseDistribution = optuna.distributions.IntUniformDistribution(
+    regressor__regressor__n_estimators: optuna.distributions.BaseDistribution = optuna.distributions.IntDistribution(
         100, 1000)
-    regressor__regressor__minibatch_frac: optuna.distributions.BaseDistribution = optuna.distributions.UniformDistribution(
+    regressor__regressor__minibatch_frac: optuna.distributions.BaseDistribution = optuna.distributions.FloatDistribution(
         0.1, 1.0)
-    # add configurations for other stages in the pipeline as needed
+
+    class Config:
+        arbitrary_types_allowed: bool = True
 
 
 class PipelineConfig(BaseModel):
@@ -98,10 +100,10 @@ class HPOHandler:
 
         params = {}
         for key, distribution in param_grid.items():
-            if isinstance(distribution, optuna.distributions.UniformDistribution):
+            if isinstance(distribution, optuna.distributions.FloatDistribution):
                 params[key] = trial.suggest_float(
                     key, distribution.low, distribution.high)
-            elif isinstance(distribution, optuna.distributions.IntUniformDistribution):
+            elif isinstance(distribution, optuna.distributions.IntDistribution):
                 params[key] = trial.suggest_int(
                     key, distribution.low, distribution.high)
             else:

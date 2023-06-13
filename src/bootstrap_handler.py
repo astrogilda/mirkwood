@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import numpy as np
 from src.model_handler import ModelHandler
 from pydantic_numpy import NDArrayFp64
-from data_handler import DataHandler, GalaxyProperty
+from src.data_handler import DataHandler, GalaxyProperty
 from utils.odds_and_ends import resample_data
 
 
