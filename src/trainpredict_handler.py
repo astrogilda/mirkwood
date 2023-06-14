@@ -29,9 +29,13 @@ class TrainPredictHandler(BaseModel):
 
     X: np.ndarray
     y: np.ndarray
+    X_test: Optional[np.ndarray] = None
+    y_test: Optional[np.ndarray] = None
     confidence_level: float = Field(0.67, gt=0, le=1)
     n_folds_outer: int = Field(default=5, ge=2, le=20)
     n_folds_inner: int = Field(default=5, ge=2, le=20)
+    num_bs_inner: int = Field(50, alias="NUM_BS_INNER")
+    num_bs_outer: int = Field(50, alias="NUM_BS_OUTER")
     X_noise_percent: float = Field(default=None, ge=0, le=1)
     X_transformer: XTransformer = XTransformer()  # Default XTransformer
     y_transformer: YTransformer = YTransformer()  # Default YTransformer
@@ -41,13 +45,10 @@ class TrainPredictHandler(BaseModel):
     property_name: Optional[str] = None
     testfoldnum: int = 0
     fitting_mode: bool = True
-    num_bs: int = Field(10, alias="NUM_BS")
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
     n_workers: int = 1  # control the number of workers
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
-
-    _model_handler: Optional[ModelHandler] = PrivateAttr(None)
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -58,36 +59,42 @@ class TrainPredictHandler(BaseModel):
             raise FileNotFoundError(f"File at {value} not found.")
         return value
 
-    @validator('X', 'y')
+    @validator('X', 'y', 'X_test', 'y_test')
     def validate_array_length(cls, v):
-        if len(v) < 100:
+        if v is not None and len(v) < 100:
             raise ValueError('The array should have at least 100 elements')
         return v
 
-    @validator('X', 'y', pre=True)
+    @validator('X', 'y', 'X_test', 'y_test', pre=True)
     def _check_same_length(cls, value: np.ndarray, values: dict, config, field: ModelField):
-        if 'X' in values and field.name == 'y':
+        if field.name in ['y', 'y_test'] and 'X' in values:
             X = values['X']
             X, y = check_X_y(X, value)
             values['X'] = X
             return y
+        elif field.name in ['y', 'y_test'] and 'X_test' in values:
+            X = values['X_test']
+            X, y = check_X_y(X, value)
+            values['X_test'] = X
+            return y
         return value
 
-    @validator('X')
+    @validator('X', 'X_test')
     def _check_X_dimension(cls, v: np.ndarray) -> np.ndarray:
         """Validate if the input X array is two-dimensional"""
-        if len(v.shape) != 2:
+        if v is not None and len(v.shape) != 2:
             raise ValueError("X should be 2-dimensional")
         return v
 
-    @validator('y', pre=True)
+    @validator('y', 'y_test', pre=True)
     def _check_y_dimension(cls, v: np.ndarray) -> np.ndarray:
         """Validate if the input y array is one-dimensional or two-dimensional with second dimension 1"""
-        if len(v.shape) == 1:
-            v = v.reshape(-1, 1)
-        elif len(v.shape) != 2 or (len(v.shape) == 2 and v.shape[1] != 1):
-            raise ValueError(
-                "y should be 1-dimensional or 2-dimensional with second dimension 1")
+        if v is not None:
+            if len(v.shape) == 1:
+                v = v.reshape(-1, 1)
+            elif len(v.shape) != 2 or (len(v.shape) == 2 and v.shape[1] != 1):
+                raise ValueError(
+                    "y should be 1-dimensional or 2-dimensional with second dimension 1")
         return v
 
     @validator('X_transformer', 'y_transformer', pre=True)
@@ -184,7 +191,7 @@ class TrainPredictHandler(BaseModel):
 
             with Pool(self.n_workers) as p:
                 args = ((bootstrap_handler, j, self.property_name,
-                        self.testfoldnum) for j in range(self.num_bs))
+                        self.testfoldnum) for j in range(self.num_bs_inner))
                 concat_output = p.starmap(
                     BootstrapHandler.bootstrap_func_mp, args)
 

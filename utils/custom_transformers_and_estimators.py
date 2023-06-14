@@ -11,11 +11,12 @@ from ngboost.scores import LogScore, Score
 from pydantic import BaseModel, Field, validator, root_validator, conint, confloat
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.tree import DecisionTreeRegressor
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Tuple
 
-from utils.odds_and_ends import reshape_array
+from utils.odds_and_ends import reshape_to_1d_array, reshape_to_2d_array
 
 from sklearn.pipeline import Pipeline
+from utils.weightify import Weightify
 
 
 class ModelConfig(BaseModel):
@@ -246,14 +247,50 @@ class CustomNGBRegressor(NGBRegressor):
 
 
 class CustomTransformedTargetRegressor(TransformedTargetRegressor):
-    def fit(self, X: np.ndarray, y: np.ndarray) -> 'CustomTransformedTargetRegressor':
 
-        # Also explicitly call fit on `_MultipleTransformer`
+    @staticmethod
+    def calculate_weights(y_train: np.ndarray, y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        weightifier = Weightify()
+        train_weights = weightifier.fit_transform(
+            y_train) if weight_flag else np.ones_like(y_train)
+        val_weights = weightifier.transform(
+            y_val) if weight_flag and y_val is not None else None
+        return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights)
+
+    def fit(self, X: np.ndarray, y: np.ndarray, X_val: Optional[np.ndarray] = None,
+            y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> 'CustomTransformedTargetRegressor':
+
+        # Explicitly call fit on `_MultipleTransformer`
         self.transformer.fit(X=y)
         y = self.transformer.transform(X=y)
-        print(f"Transformed y shape: {y.shape}")
-        print("\n\n")
-        self.regressor.fit(X, y)
+        if y_val is not None:
+            y_val = self.transformer.transform(X=y_val)
+
+        # calculate weights for training and validation, to be passed to the regressor
+        train_weights, val_weights = CustomTransformedTargetRegressor.calculate_weights(
+            y, y_val, weight_flag)
+
+        # fit the preprocessor in the regressor
+        self.regressor.named_steps['preprocessor'].fit(X)
+        X = self.regressor.named_steps['preprocessor'].transform(X)
+        if X_val is not None:
+            X_val = self.regressor.named_steps['preprocessor'].transform(X_val)
+
+        # fit the regressor
+        self.regressor.named_steps['regressor'].fit(
+            X=X, y=y, X_val=X_val, y_val=y_val, sample_weight=train_weights, val_sample_weight=val_weights)
+
+        # inverse transform y, y_val, X, X_val
+        y = self.transformer.inverse_transform(X=y)
+        if y_val is not None:
+            y_val = self.transformer.inverse_transform(X=y_val)
+        X = self.regressor.named_steps['preprocessor'].inverse_transform(X)
+        if X_val is not None:
+            X_val = self.regressor.named_steps['preprocessor'].inverse_transform(
+                X_val)
+
+        # self.regressor.fit(X, y)
+
         self.regressor_ = deepcopy(self.regressor)
         self.transformer_ = deepcopy(self.transformer)
         return self
@@ -262,14 +299,15 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         check_is_fitted(self, 'regressor_')
         check_is_fitted(self, 'transformer_')
 
+        # Preprocess the input data
+        X_trans = self.regressor_.named_steps['preprocessor'].transform(X)
+
         # Extract the underlying regressor
         underlying_regressor = self.regressor_.named_steps['regressor']
 
-        # Check if predict_std method exists in the regressor
+        # Check if predict method exists in the regressor
         if hasattr(underlying_regressor, 'predict'):
-            y_pred_mean = underlying_regressor.predict(X)
-            # print(y_pred_mean)
-            # print(y_pred_mean.shape)
+            y_pred_mean = underlying_regressor.predict(X_trans)
             return self.transformer_.inverse_transform(y_pred_mean).ravel()
         else:
             raise AttributeError(
@@ -279,16 +317,15 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         check_is_fitted(self, 'regressor_')
         check_is_fitted(self, 'transformer_')
 
-        # X_trans = self.regressor.transform(X)
+        # Preprocess the input data
+        X_trans = self.regressor_.named_steps['preprocessor'].transform(X)
 
         # Extract the underlying regressor
         underlying_regressor = self.regressor_.named_steps['regressor']
 
         # Check if predict_std method exists in the regressor
         if hasattr(underlying_regressor, 'predict_std'):
-            y_pred_std = underlying_regressor.predict_std(X)
-            # print(y_pred_std)
-            # print(y_pred_std.shape)
+            y_pred_std = underlying_regressor.predict_std(X_trans)
             return self.transformer_.inverse_transform(y_pred_std).ravel()
         else:
             raise AttributeError(
@@ -314,7 +351,7 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
 
     if x_transformer.transformers:
         feature_pipeline = Pipeline([
-            ('preprocessing', pipeline_X),
+            ('preprocessor', pipeline_X),
             ('regressor', CustomNGBRegressor(**model_config.dict()))
         ])
     else:

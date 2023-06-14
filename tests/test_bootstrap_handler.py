@@ -1,90 +1,64 @@
 import pytest
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from src.bootstrap_handler import BootstrapHandler, numba_resample
 from src.model_handler import ModelHandler, ModelConfig
+from src.bootstrap_handler import BootstrapHandler
 from pydantic import ValidationError
+from src.data_handler import GalaxyProperty
 
+# Test Data
+X_train = np.random.rand(5, 3).astype(np.float64)
+y_train = np.random.rand(5).astype(np.float64)
+X_val = np.random.rand(3, 3).astype(np.float64)
+y_val = np.random.rand(3).astype(np.float64)
 
-def test_numba_resample():
-    idx = np.array([1, 2, 3, 4, 5])
-    n_samples = 3
-    resampled_idx = numba_resample(idx, n_samples)
-    assert len(resampled_idx) == n_samples
+# ModelHandler for tests
+model_handler = ModelHandler(
+    X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val)
 
 
 def test_BootstrapHandler_init():
-    x = np.random.rand(5).astype(np.float32)
-    y = np.random.rand(5).astype(np.float32)
-
     with pytest.raises(ValidationError):
         # This should fail as frac_samples_best should be in (0, 1]
-        BootstrapHandler(x=x, y=y, frac_samples_best=1.5)
-
-    with pytest.raises(ValidationError):
-        # This should fail as x and y must be 1-dimensional
-        BootstrapHandler(x=np.random.rand(5, 1).astype(np.float32), y=y)
+        BootstrapHandler(model_handler=model_handler, frac_samples_best=1.5)
 
     # This should pass
-    BootstrapHandler(x=x, y=y)
+    BootstrapHandler(model_handler=model_handler, frac_samples_best=0.8)
 
 
-def test_resample_data():
-    x = np.random.rand(5).astype(np.float32)
-    y = np.random.rand(5).astype(np.float32)
-    handler = BootstrapHandler(x=x, y=y, frac_samples_best=0.5)
-    resampled = handler.resample_data(x, y)
+def test_BootstrapHandler_Validation():
+    with pytest.raises(ValidationError):
+        # Test should fail due to the value of z_score is outside the valid range
+        BootstrapHandler(model_handler=model_handler, z_score=10)
 
-    assert len(resampled[0]) == len(resampled[1]) == int(0.5*len(x))
-    assert len(resampled[2]) == int(0.5*len(x))
+    with pytest.raises(ValidationError):
+        # Test should fail due to invalid GalaxyProperty
+        BootstrapHandler(model_handler=model_handler,
+                         galaxy_property='Invalid')
 
-
-def test_apply_inverse_transform():
-    x = np.random.rand(5).astype(np.float32)
-    y = np.random.rand(5).astype(np.float32)
-    handler = BootstrapHandler(x=x, y=y)
-
-    # Using StandardScaler for demonstration
-    scaler = StandardScaler()
-    scaled_y = scaler.fit_transform(y.reshape(-1, 1))
-
-    inverse_transformed = handler.apply_inverse_transform(
-        scaled_y, scaled_y, scaled_y, [scaler])
-
-    assert np.allclose(inverse_transformed[0].reshape(-1, ), y, atol=1e-5)
-    assert np.allclose(inverse_transformed[1].reshape(-1, ), y, atol=1e-5)
-    assert np.allclose(inverse_transformed[2].reshape(-1, ), y, atol=1e-5)
-
-
-def test_apply_reversify():
-    x = np.random.rand(5).astype(np.float32)
-    y = np.random.rand(5).astype(np.float32)
-    handler = BootstrapHandler(x=x, y=y)
-
-    # Simple reversify function
-    def reversify_fn(arr):
-        return arr[::-1]
-
-    reversed = handler.apply_reversify(x, x, x, reversify_fn)
-
-    assert np.array_equal(reversed[0], x[::-1])
-    assert np.array_equal(reversed[1], x[::-1])
-    assert np.array_equal(reversed[2], x[::-1])
+    # Test should pass with valid z_score and galaxy_property
+    BootstrapHandler(model_handler=model_handler, z_score=1.96,
+                     galaxy_property=GalaxyProperty.STELLAR_MASS)
 
 
 def test_bootstrap_func_mp():
+    bootstrap_handler = BootstrapHandler(model_handler=model_handler)
 
-    x = np.random.rand(5).astype(np.float32)
-    y = np.random.rand(5).astype(np.float32)
-    handler = BootstrapHandler(x=x, y=y)
+    y_pred_mean, y_pred_std, y_pred_lower, y_pred_upper, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+        iteration_num=0)
 
-    model_handler = ModelHandler(x=x, y=y, config=ModelConfig())
+    # Assert the shapes are consistent
+    assert y_pred_mean.shape == y_train.shape
+    assert y_pred_std.shape == y_train.shape
+    assert y_pred_lower.shape == y_train.shape
+    assert y_pred_upper.shape == y_train.shape
+    assert shap_values_mean.shape == y_train.shape
 
-    bootstrap_output = handler.bootstrap_func_mp(
-        model_handler=model_handler, iteration_num=0)
+    # Assert that the predicted means are within the expected range
+    assert np.all(y_pred_mean >= y_pred_lower)
+    assert np.all(y_pred_mean <= y_pred_upper)
 
-    assert np.array_equal(bootstrap_output[0], x)
-    assert np.array_equal(bootstrap_output[1], x)
-    assert np.array_equal(bootstrap_output[2], x)
-    assert np.array_equal(bootstrap_output[3], x)
-    assert np.array_equal(bootstrap_output[4], x)
+    # Assert that the confidence intervals have the expected relationship
+    assert np.all(y_pred_upper - y_pred_mean == y_pred_mean - y_pred_lower)
+
+    # Assert that SHAP values are finite
+    assert np.all(np.isfinite(shap_values_mean))

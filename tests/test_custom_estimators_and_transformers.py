@@ -5,12 +5,14 @@ import pytest
 from hypothesis import given, strategies as st, settings
 from random import shuffle
 from utils.custom_transformers_and_estimators import *
+from utils.custom_transformers_and_estimators import _MultipleTransformer
+
 from ngboost.distns import Normal
 from ngboost.scores import LogScore
 from sklearn.preprocessing import FunctionTransformer, StandardScaler, RobustScaler
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
 from pydantic.error_wrappers import ValidationError
-from utils.custom_transformers_and_estimators import _MultipleTransformer
 
 
 @st.composite
@@ -89,6 +91,22 @@ def test_model_config_wrong_base():
         ModelConfig(Base=StandardScaler())
 
 
+def test_customngbregressor_init():
+    """Test the initialization of the CustomNGBRegressor class"""
+    ngb = CustomNGBRegressor(**ModelConfig().dict())
+    assert isinstance(ngb, CustomNGBRegressor)
+    assert isinstance(ngb.Base, DecisionTreeRegressor)
+    assert ngb.Dist == Normal
+    assert ngb.Score == LogScore
+    assert ngb.n_estimators == 500
+    assert ngb.learning_rate == 0.04
+    assert ngb.col_sample == 1.0
+    assert ngb.minibatch_frac == 1.0
+    assert ngb.verbose is False
+    assert ngb.natural_gradient is True
+    assert ngb.early_stopping_rounds is None
+
+
 @given(array_1d_and_2d())
 @settings(
     deadline=None, max_examples=10
@@ -98,9 +116,15 @@ def test_customngbregressor_fit_and_predict(arrays):
     y, X = arrays
     X = np.nan_to_num(X)  # replace infinities with large finite numbers
     y = np.nan_to_num(y)  # replace infinities with large finite numbers
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
+    sample_weight = np.random.uniform(low=0.1, high=1.0, size=X_train.shape[0])
+    val_sample_weight = np.random.uniform(
+        low=0.1, high=1.0, size=X_val.shape[0])
 
     ngb = CustomNGBRegressor()
-    ngb.fit(X, y)
+    ngb.fit(X_train, y_train, sample_weight=sample_weight, X_val=X_val,
+            y_val=y_val, val_sample_weight=val_sample_weight)
     preds = ngb.predict(X)
 
     assert isinstance(preds, np.ndarray)
@@ -220,6 +244,9 @@ def test_multiple_transformer(X):
 )
 def test_create_estimator(arrays):
     y, X = arrays
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
+
     model_config = ModelConfig()
     x_transformer = XTransformer()
     y_transformer = YTransformer()
@@ -228,7 +255,7 @@ def test_create_estimator(arrays):
                            y_transformer=y_transformer)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
-    ttr.fit(X, y)
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, weight_flag=True)
     y_pred = ttr.predict(X)
     # Check shape of predicted y
     assert y_pred.shape == y.flatten().shape
@@ -246,13 +273,13 @@ def test_create_estimator_None(arrays):
     """Test create_estimator's response to None input"""
     # This should not raise an error and use default parameters instead
     y, X = arrays
-    print(X.shape, y.shape)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
 
     ttr = create_estimator(None, None, None)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
-    print(X.shape, y.shape)
-    ttr.fit(X, y)
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, weight_flag=True)
     y_pred = ttr.predict(X)
     # Check shape of predicted y
     assert y_pred.shape == y.flatten().shape

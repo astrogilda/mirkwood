@@ -1,5 +1,4 @@
-from numba import jit
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, confloat
 from typing import Optional, Tuple
 import numpy as np
 from src.model_handler import ModelHandler
@@ -20,30 +19,26 @@ class BootstrapHandler(BaseModel):
         Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
     """
     model_handler: ModelHandler
-    frac_samples_best: float = Field(0.8, gt=0, le=1)
-    galaxy_property: GalaxyProperty = Field(GalaxyProperty.STELLAR_MASS)
-    z_score: float = 1.96
+    frac_samples_best: float = Field(default=0.8, gt=0, le=1)
+    galaxy_property: GalaxyProperty = Field(
+        default=GalaxyProperty.STELLAR_MASS)
+    z_score: confloat(gt=0, le=5) = Field(
+        default=1.96,
+        description="The z-score for the confidence interval. Defaults to 1.96, which corresponds to a 95 per cent confidence interval."
+    )
 
-    @validator('frac_samples_best')
-    def _check_frac_samples_best(cls, v: float) -> float:
-        """Validate if frac_samples_best is in (0, 1] range"""
-        if not (0 < v <= 1):
-            raise ValueError("frac_samples_best should be in (0, 1] range")
-        return v
-
-    def bootstrap_func_mp(self, iteration_num: int, property_name: Optional[str] = None, testfoldnum: int = 0) -> Tuple[np.ndarray,
-                                                                                                                        np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def bootstrap_func_mp(self, iteration_num: int, property_name: Optional[str] = None, testfoldnum: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform bootstrapping for model training and prediction.
 
         Parameters
         ----------
         iteration_num : int
-            Iteration number.
+            Iteration number for current bootstrap iteration.
         property_name : str, optional
-            Property name, by default None.
+            Property name, default is None.
         testfoldnum : int, optional
-            Test fold number, by default 0.
+            Test fold number, default is 0.
 
         Returns
         -------
@@ -70,9 +65,15 @@ class BootstrapHandler(BaseModel):
         y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
             y_pred_std, y_pred_mean + self.z_score * y_pred_std
 
+        # Postprocess prediction values
         y_pred_upper, y_pred_lower, y_pred_mean = DataHandler.postprocess_y(
             ys=(y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
 
+        # Re-calculate std after postprocessing
         y_pred_std = (np.ma.masked_invalid(y_pred_upper) -
                       np.ma.masked_invalid(y_pred_lower))/2
-        return np.ma.masked_invalid(y_pred_mean), np.ma.masked_invalid(y_pred_std), np.ma.masked_invalid(y_pred_lower), np.ma.masked_invalid(y_pred_upper), np.ma.masked_invalid(shap_values_mean)
+
+        # Create mask for invalid values
+        mask = np.ma.masked_invalid
+
+        return mask(y_pred_mean), mask(y_pred_std), mask(y_pred_lower), mask(y_pred_upper), mask(shap_values_mean)

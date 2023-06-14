@@ -16,7 +16,7 @@ def reshape_to_1d_array(array: np.ndarray) -> np.ndarray:
 
 
 @jit(nopython=True)
-def reshape_to_column_array(array: np.ndarray) -> np.ndarray:
+def reshape_to_2d_array(array: np.ndarray) -> np.ndarray:
     """
     Reshape an array into a 2D column array. Uses Numba for JIT compilation and
     faster execution.

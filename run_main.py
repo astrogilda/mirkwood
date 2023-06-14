@@ -2,12 +2,12 @@ from src.bootstrap_handler import BootstrapHandler
 from src.model_handler import ModelHandler
 from src.trainpredict_handler import TrainPredictHandler
 from functools import partial
-from src.data_handler import DataHandler, DataHandlerConfig
+from src.data_handler import DataHandler, DataHandlerConfig, TrainData
 from utils.custom_cv import CustomCV
 
 
 data_handler = DataHandler(DataHandlerConfig())
-X, y = data_handler.get_data(['simba'])
+X, y = data_handler.get_data(TrainData.SIMBA)
 
 
 class NestedCV:

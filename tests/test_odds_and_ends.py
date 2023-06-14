@@ -1,4 +1,3 @@
-from hypothesis import given, strategies as st
 import numpy as np
 from typing import List
 from hypothesis import given, strategies as st, settings
@@ -16,9 +15,9 @@ def test_reshape_to_1d_array(array: List[float]):
 
 
 @given(st.lists(st.floats(allow_nan=False), min_size=1, max_size=10))
-def test_reshape_to_column_array(array: List[List[float]]):
+def test_reshape_to_2d_array(array: List[List[float]]):
     np_array = np.array(array)
-    reshaped = reshape_to_column_array(np_array)
+    reshaped = reshape_to_2d_array(np_array)
     assert reshaped.ndim == 2
     assert reshaped.shape[1] == 1
     assert np.array_equal(reshaped, np_array.reshape(-1, 1))

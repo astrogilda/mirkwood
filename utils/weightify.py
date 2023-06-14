@@ -7,6 +7,7 @@ from scipy.stats import gaussian_kde
 from scipy.ndimage import convolve1d, gaussian_filter1d
 import numpy as np
 from sklearn.utils.validation import check_is_fitted
+from utils.odds_and_ends import reshape_to_1d_array
 
 
 class Style(str, Enum):
@@ -225,8 +226,7 @@ class Weightify(BaseEstimator, TransformerMixin):
         self : Weightify
             The fitted Weightify transformer.
         """
-        if y.ndim > 1:
-            raise ValueError("Output y must be 1D (i.e. scalar)")
+        y = reshape_to_1d_array(y)
 
         if sub_size < len(y):
             indices = np.random.permutation(len(y))[:sub_size]
@@ -258,8 +258,7 @@ class Weightify(BaseEstimator, TransformerMixin):
         """
         check_is_fitted(self, 'poly_coeffs_')
 
-        if y.ndim > 1:
-            raise ValueError("Output y must be 1D (i.e. scalar)")
+        y = reshape_to_1d_array(y)
 
         poly_order = len(self.poly_coeffs_) - 1
         transposed_y = np.vstack([y ** (poly_order - i)

@@ -16,7 +16,7 @@ class NestedModel:
             self.models.append(model)
 
             y_pred_mean = model.predict(X_current)
-            y_pred_std = np.std(y - y_pred_mean)
+            y_pred_std = model.predict_std(X_current)
 
             X_current = np.column_stack((X_current, y_pred_mean, y_pred_std))
 
@@ -26,7 +26,7 @@ class NestedModel:
 
         for model in self.models[:n]:
             y_pred_mean = model.predict(X_current)
-            y_pred_std = np.std(y_preds[-1] - y_pred_mean) if y_preds else 0
+            y_pred_std = model.predict_std(X_current)
 
             X_current = np.column_stack((X_current, y_pred_mean, y_pred_std))
             y_preds.append(y_pred_mean)
