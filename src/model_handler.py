@@ -1,16 +1,16 @@
 
 
 # Suppress deprecation warnings
-from utils.weightify import Weightify
-from utils.odds_and_ends import reshape_to_1d_array, reshape_to_2d_array
+from pydantic import BaseModel, Field, validator
+from sklearn.exceptions import NotFittedError
+from utils.odds_and_ends import reshape_to_1d_array
 from utils.custom_transformers_and_estimators import ModelConfig, XTransformer, YTransformer, create_estimator, CustomTransformedTargetRegressor
 import shap
-from pydantic_numpy import NDArrayFp64
-from pydantic import BaseModel, Field, validator
+
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from joblib import dump, load
 import numpy as np
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, List
 from pathlib import Path
 import warnings
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
@@ -27,13 +27,13 @@ class ModelHandler(BaseModel):
     X_val: Optional[np.ndarray] = None
     y_val: Optional[np.ndarray] = None
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    fitting_mode: bool = True
+    fitting_mode: bool = True  # common for both prediction and shap values
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
     estimator: Optional[CustomTransformedTargetRegressor] = None
     model_config: ModelConfig = ModelConfig()
-    X_transformer: XTransformer = XTransformer()  # Default XTransformer
-    y_transformer: YTransformer = YTransformer()  # Default YTransformer
+    X_transformer: XTransformer = XTransformer()
+    y_transformer: YTransformer = YTransformer()
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -44,10 +44,14 @@ class ModelHandler(BaseModel):
             self.estimator = create_estimator(
                 model_config=self.model_config, X_transformer=self.X_transformer, y_transformer=self.y_transformer)
 
-    @validator('file_path', 'shap_file_path', pre=True, always=True)
-    def default_file_path(cls, v: Optional[Path]) -> Path:
-        """Default file path to be used when none is provided."""
-        return v or Path.home() / 'desika'
+    @property
+    def is_fitted(self) -> bool:
+        try:
+            # Check if the estimator has been fit
+            self.estimator.predict(self.X_train[0:1])
+            return True
+        except NotFittedError:
+            return False
 
     @validator('estimator', pre=True)
     def validate_estimator(cls, v: Optional[CustomTransformedTargetRegressor]) -> Optional[CustomTransformedTargetRegressor]:
@@ -59,7 +63,6 @@ class ModelHandler(BaseModel):
     def fit(self) -> None:
         """Fit the estimator to the data, and save to a file if provided. If fitting_mode is False, load the estimator from a file."""
         if self.fitting_mode:
-
             fit_params = {'weight_flag': self.weight_flag}
             if self.X_val is not None and self.y_val is not None:
                 fit_params.update(
@@ -71,30 +74,40 @@ class ModelHandler(BaseModel):
                 dump(self.estimator, self.file_path)
 
         else:
-            if self.file_path is not None:
-                self.estimator = load(self.file_path)
-            else:
-                warnings.warn(
-                    "No file path provided. Using the default estimator.")
+            if self.file_path is None or not self.file_path.exists():
+                raise FileNotFoundError(
+                    f"File at {self.file_path or 'provided path'} not found.")
+            self.estimator = load(self.file_path)
 
     def predict(self, X_test: Optional[np.ndarray], return_bounds: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        if self.fitting_mode and not self.is_fitted:
+            raise NotFittedError("Estimator is not fitted.")
+
         X = X_test if X_test is not None else self.X_val
         predicted_mean = reshape_to_1d_array(self.estimator.predict(X))
         predicted_std = reshape_to_1d_array(
-            self.estimator.regressor_.named_steps['regressor'].predict_std(X)) if return_bounds else None
+            self.estimator.predict_std(X)) if return_bounds else None
         return predicted_mean, predicted_std
 
-    def calculate_shap_values(self, explainer: Any, X_test: Optional[np.ndarray]) -> np.ndarray:
+    def calculate_shap_values(self, X_test: Optional[np.ndarray], feature_names: List[str]) -> np.ndarray:
         """Calculate SHAP values, based on whether fitting mode is enabled or not. If not in fitting mode, load the SHAP explainer from a file."""
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
-            base_model = self.estimator.regressor_.named_steps['regressor'].base_model
+            if self.fitting_mode and not self.is_fitted:
+                raise NotFittedError("Estimator is not fitted.")
+
             X = X_test if X_test is not None else self.X_val
 
             if self.fitting_mode:
+                base_model = self.estimator.regressor_.named_steps['regressor'].base_model
+                if self.X_train.shape[0] > 200:
+                    data = shap.kmeans(self.X_train, 100)
+                else:
+                    data = self.X_train
+                print(f"data.shape = {data.shape}")
                 explainer_mean = shap.TreeExplainer(
-                    base_model, data=shap.kmeans(self.X_train, 100), model_output=0)
+                    base_model, data=data, model_output=0, feature_names=feature_names)
                 shap_values_mean = explainer_mean.shap_values(
                     X, check_additivity=False)
                 if self.shap_file_path is not None:

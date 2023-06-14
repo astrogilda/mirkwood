@@ -248,10 +248,10 @@ def test_create_estimator(arrays):
         X, y, test_size=0.20, random_state=42)
 
     model_config = ModelConfig()
-    x_transformer = XTransformer()
+    X_transformer = XTransformer()
     y_transformer = YTransformer()
     ttr = create_estimator(model_config=model_config,
-                           x_transformer=x_transformer,
+                           X_transformer=X_transformer,
                            y_transformer=y_transformer)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 

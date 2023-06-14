@@ -255,7 +255,7 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
             y_train) if weight_flag else np.ones_like(y_train)
         val_weights = weightifier.transform(
             y_val) if weight_flag and y_val is not None else None
-        return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights)
+        return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights) if val_weights is not None else None
 
     def fit(self, X: np.ndarray, y: np.ndarray, X_val: Optional[np.ndarray] = None,
             y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> 'CustomTransformedTargetRegressor':
@@ -333,23 +333,23 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
 
 
 def create_estimator(model_config: Optional[ModelConfig] = None,
-                     x_transformer: Optional[XTransformer] = None,
+                     X_transformer: Optional[XTransformer] = None,
                      y_transformer: Optional[YTransformer] = None) -> CustomTransformedTargetRegressor:
 
     if model_config is None:
         model_config = ModelConfig()
 
-    if x_transformer is None:
-        x_transformer = XTransformer()
+    if X_transformer is None:
+        X_transformer = XTransformer()
 
     if y_transformer is None:
         y_transformer = YTransformer()
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
-                          for transformer in x_transformer.transformers])
+                          for transformer in X_transformer.transformers])
     pipeline_y = _MultipleTransformer(y_transformer=y_transformer)
 
-    if x_transformer.transformers:
+    if X_transformer.transformers:
         feature_pipeline = Pipeline([
             ('preprocessor', pipeline_X),
             ('regressor', CustomNGBRegressor(**model_config.dict()))
