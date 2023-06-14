@@ -162,10 +162,7 @@ class TrainPredictHandler(BaseModel):
             # carry out hyperparameter tuning
             hpo_handler = HPOHandler(params=HPOHandlerParams(estimator=PipelineConfig(estimator=estimator),
                                                              cv=cv_inner, z_score=self.calculate_z_score()))
-            weights_train = ModelHandler.calculate_weights(
-                y_train=y_train, y_val=y_val, weight_flag=self.weight_flag)
-            hpo_handler.fit(X_train=X_train, y_train=y_train,
-                            weights=weights_train)
+            hpo_handler.fit(X_train=X_train, y_train=y_train)
             best_estimator = hpo_handler.params.estimator.estimator
 
             # setup the model handler with the best estimator found using HPO, and the right training and validation data

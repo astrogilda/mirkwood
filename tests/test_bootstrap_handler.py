@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from src.data_handler import GalaxyProperty
 
 # Test Data
-X_train = np.random.rand(5, 3).astype(np.float64)
-y_train = np.random.rand(5).astype(np.float64)
-X_val = np.random.rand(3, 3).astype(np.float64)
-y_val = np.random.rand(3).astype(np.float64)
+X_train = np.random.rand(50, 3).astype(np.float64)
+y_train = np.random.rand(50).astype(np.float64)
+X_val = np.random.rand(30, 3).astype(np.float64)
+y_val = np.random.rand(30).astype(np.float64)
 
 # ModelHandler for tests
 model_handler = ModelHandler(

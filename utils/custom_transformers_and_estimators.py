@@ -82,9 +82,9 @@ class TransformerTuple(list):
         super().__init__(transformers)
 
 
-class XTransformer(BaseModel):
+class TransformerBase(BaseModel):
     """
-    This class handles transformers for X.
+    Base class for Transformers handling common validations.
     """
     transformers: Optional[Union[TransformerTuple, TransformerConfig]] = Field(
         default=None
@@ -93,6 +93,11 @@ class XTransformer(BaseModel):
     @root_validator(pre=True)
     def validate_transformers(cls, values):
         transformers = values.get("transformers")
+
+       # If transformers is an instance of a TransformerMixin but not a TransformerConfig, raise an error
+        if isinstance(transformers, TransformerMixin) and not isinstance(transformers, TransformerConfig):
+            raise ValueError(
+                "transformers must be of type TransformerConfig or TransformerTuple")
 
         if transformers is None:
             transformers = TransformerTuple([
@@ -106,39 +111,18 @@ class XTransformer(BaseModel):
         return values
 
 
-class YTransformer(BaseModel):
+class XTransformer(TransformerBase):
+    """
+    This class handles transformers for X.
+    """
+    pass
+
+
+class YTransformer(TransformerBase):
     """
     This class handles transformers for y.
     """
-    transformers: Optional[Union[TransformerTuple, TransformerConfig]] = Field(
-        default=None
-    )
-
-    @root_validator(pre=True)
-    def validate_transformers(cls, values):
-        transformers = values.get("transformers")
-
-        # If transformers is an instance of a TransformerMixin but not a TransformerConfig, raise an error
-        if isinstance(transformers, TransformerMixin) and not isinstance(transformers, TransformerConfig):
-            raise ValueError(
-                "transformers must be of type TransformerConfig or TransformerTuple")
-
-        if transformers is None:
-            transformers = TransformerTuple([
-                TransformerConfig(name="standard_scaler",
-                                  transformer=StandardScaler()),
-            ])
-
-        # If transformers is an empty list , do nothing.
-        elif not transformers:
-            transformers = transformers
-
-        else:
-            # Handle the case when transformers is a TransformerConfig instance or an instance of a valid TransformerMixin subclass
-            transformers = TransformerTuple(transformers)
-
-        values["transformers"] = transformers
-        return values
+    pass
 
 
 class _MultipleTransformer(BaseEstimator, TransformerMixin):
@@ -156,49 +140,57 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         if not isinstance(y_transformer, YTransformer):
             raise ValueError(
                 f"y_transformer should be an instance of YTransformer, but got {type(y_transformer)}")
-
         self.y_transformer = y_transformer
-        self.transformers = y_transformer.transformers
+        self._transformers = []
+        self._is_fitted = False
+
+    def apply_transform(self, X, transform_method, transformer, y=None):
+        """A helper function that reshapes data and applies transformation"""
+        try:
+            if y is None:
+                transformed_data = transform_method(reshape_to_1d_array(X))
+            else:
+                transformed_data = transform_method(reshape_to_1d_array(X), y)
+        except Exception as e:
+            try:
+                if y is None:
+                    transformed_data = transform_method(reshape_to_2d_array(X))
+                else:
+                    transformed_data = transform_method(
+                        reshape_to_2d_array(X), y)
+            except:
+                raise ValueError(
+                    f"Failed to transform data with {transformer.__class__.__name__}. Original error: {e}")
+        return transformed_data
 
     def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "_MultipleTransformer":
         """Fit all transformers using X"""
-
-        for transformer_config in self.transformers:
-            transformer = transformer_config.transformer
-            try:
-                transformer.fit(X.ravel(), y)
-            except ValueError:
-                transformer.fit(X.reshape(-1, 1), y)
-
-            print(f"{transformer_config.name} fitted")
-
-        self.is_fitted_ = True
+        X_copy = deepcopy(X)
+        for transformer in self.y_transformer.transformers:
+            new_transformer = deepcopy(transformer.transformer)
+            self.apply_transform(
+                X_copy, new_transformer.fit, new_transformer, y)
+            self._transformers.append(new_transformer)
+        self._is_fitted = True
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         """Transform X using all transformers."""
-        check_is_fitted(self, "is_fitted_")
-        result = X
-        for transformer_config in self.transformers:
-            transformer = transformer_config.transformer
-            try:
-                result = transformer.transform(result.ravel())
-            except ValueError:
-                result = transformer.transform(result.reshape(-1, 1))
-
-        return result
+        check_is_fitted(self, ["_is_fitted"])
+        X_copy = deepcopy(X)
+        for transformer in self._transformers:
+            X_copy = self.apply_transform(
+                X_copy, transformer.transform, transformer)
+        return X_copy
 
     def inverse_transform(self, X: np.ndarray) -> np.ndarray:
         """Inverse transform X using all transformers."""
-        check_is_fitted(self, "is_fitted_")
-        result = X
-        for transformer_config in reversed(self.transformers):
-            transformer = transformer_config.transformer
-            try:
-                result = transformer.inverse_transform(result.ravel())
-            except ValueError:
-                result = transformer.inverse_transform(result.reshape(-1, 1))
-        return result
+        check_is_fitted(self, ["_is_fitted"])
+        X_copy = deepcopy(X)
+        for transformer in reversed(self._transformers):
+            X_copy = self.apply_transform(
+                X_copy, transformer.inverse_transform, transformer)
+        return X_copy
 
     def get_params(self, deep=True):
         """Get parameters for this estimator."""
@@ -247,9 +239,15 @@ class CustomNGBRegressor(NGBRegressor):
 
 
 class CustomTransformedTargetRegressor(TransformedTargetRegressor):
+    """
+    A Custom Transformed Target Regressor
+    """
 
     @staticmethod
     def calculate_weights(y_train: np.ndarray, y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        """
+        Calculate weights for training and validation.
+        """
         weightifier = Weightify()
         train_weights = weightifier.fit_transform(
             y_train) if weight_flag else np.ones_like(y_train)
@@ -257,79 +255,96 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
             y_val) if weight_flag and y_val is not None else None
         return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights) if val_weights is not None else None
 
+    def preprocess_data(self, preprocessor: Pipeline, data: np.ndarray) -> np.ndarray:
+        """
+        Preprocess data using the provided preprocessor.
+        """
+        preprocessor.fit(data)
+        return preprocessor.transform(data)
+
+    def inverse_transform_data(self, transformer: Union[Pipeline, _MultipleTransformer], data: np.ndarray) -> np.ndarray:
+        """
+        Inverse transform data using the provided transformer.
+        """
+        return transformer.inverse_transform(data)
+
     def fit(self, X: np.ndarray, y: np.ndarray, X_val: Optional[np.ndarray] = None,
             y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> 'CustomTransformedTargetRegressor':
-
-        # Explicitly call fit on `_MultipleTransformer`
+        """
+        Fit the regressor.
+        """
         self.transformer.fit(X=y)
         y = self.transformer.transform(X=y)
-        if y_val is not None:
-            y_val = self.transformer.transform(X=y_val)
+        y_val = self.transformer.transform(
+            X=y_val) if y_val is not None else None
 
-        # calculate weights for training and validation, to be passed to the regressor
-        train_weights, val_weights = CustomTransformedTargetRegressor.calculate_weights(
+        train_weights, val_weights = self.calculate_weights(
             y, y_val, weight_flag)
 
-        # fit the preprocessor in the regressor
-        self.regressor.named_steps['preprocessor'].fit(X)
-        X = self.regressor.named_steps['preprocessor'].transform(X)
-        if X_val is not None:
-            X_val = self.regressor.named_steps['preprocessor'].transform(X_val)
+        preprocessor = self.regressor.named_steps['preprocessor']
+        X = self.preprocess_data(preprocessor, X)
+        X_val = self.preprocess_data(
+            preprocessor, X_val) if X_val is not None else None
 
-        # fit the regressor
-        self.regressor.named_steps['regressor'].fit(
-            X=X, y=y, X_val=X_val, y_val=y_val, sample_weight=train_weights, val_sample_weight=val_weights)
+        regressor = self.regressor.named_steps['regressor']
+        regressor.fit(X=X, y=y, X_val=X_val, y_val=y_val,
+                      sample_weight=train_weights, val_sample_weight=val_weights)
 
-        # inverse transform y, y_val, X, X_val
-        y = self.transformer.inverse_transform(X=y)
-        if y_val is not None:
-            y_val = self.transformer.inverse_transform(X=y_val)
-        X = self.regressor.named_steps['preprocessor'].inverse_transform(X)
-        if X_val is not None:
-            X_val = self.regressor.named_steps['preprocessor'].inverse_transform(
-                X_val)
-
-        # self.regressor.fit(X, y)
+        y = self.inverse_transform_data(self.transformer, y)
+        y_val = self.inverse_transform_data(
+            self.transformer, y_val) if y_val is not None else None
+        X = self.inverse_transform_data(preprocessor, X)
+        X_val = self.inverse_transform_data(
+            preprocessor, X_val) if X_val is not None else None
 
         self.regressor_ = deepcopy(self.regressor)
         self.transformer_ = deepcopy(self.transformer)
+
         return self
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def predict_with_check(self, X: np.ndarray, method_name: str) -> np.ndarray:
+        """
+        Predict with provided method, with checks.
+        """
         check_is_fitted(self, 'regressor_')
         check_is_fitted(self, 'transformer_')
 
-        # Preprocess the input data
-        X_trans = self.regressor_.named_steps['preprocessor'].transform(X)
-
-        # Extract the underlying regressor
+        X_trans = self.preprocess_data(
+            self.regressor_.named_steps['preprocessor'], X)
         underlying_regressor = self.regressor_.named_steps['regressor']
 
-        # Check if predict method exists in the regressor
-        if hasattr(underlying_regressor, 'predict'):
-            y_pred_mean = underlying_regressor.predict(X_trans)
-            return self.transformer_.inverse_transform(y_pred_mean).ravel()
+        if hasattr(underlying_regressor, method_name):
+            return underlying_regressor.__getattribute__(method_name)(X_trans)
         else:
             raise AttributeError(
-                f"The underlying regressor does not have 'predict' method.")
+                f"The underlying regressor does not have '{method_name}' method.")
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict the target variable.
+        """
+        y_pred = self.predict_with_check(X, method_name='predict')
+        return self.inverse_transform_data(self.transformer_, y_pred).ravel()
 
     def predict_std(self, X: np.ndarray) -> np.ndarray:
-        check_is_fitted(self, 'regressor_')
-        check_is_fitted(self, 'transformer_')
+        """
+        Predict the standard deviation of the target variable.
+        """
+        y_pred_std = self.predict_with_check(X, method_name='predict_std')
+        y_pred_mean = self.predict_with_check(X, method_name='predict')
 
-        # Preprocess the input data
-        X_trans = self.regressor_.named_steps['preprocessor'].transform(X)
+        y_pred_upper = y_pred_mean + y_pred_std
+        y_pred_lower = y_pred_mean - y_pred_std
 
-        # Extract the underlying regressor
-        underlying_regressor = self.regressor_.named_steps['regressor']
+        y_pred_upper_inverse_transformed = self.inverse_transform_data(
+            self.transformer_, y_pred_upper)
+        y_pred_lower_inverse_transformed = self.inverse_transform_data(
+            self.transformer_, y_pred_lower)
 
-        # Check if predict_std method exists in the regressor
-        if hasattr(underlying_regressor, 'predict_std'):
-            y_pred_std = underlying_regressor.predict_std(X_trans)
-            return self.transformer_.inverse_transform(y_pred_std).ravel()
-        else:
-            raise AttributeError(
-                f"The underlying regressor does not have 'predict_std' method.")
+        y_pred_std_inverse_transformed = (
+            y_pred_upper_inverse_transformed - y_pred_lower_inverse_transformed) / 2
+
+        return reshape_to_1d_array(y_pred_std_inverse_transformed)
 
 
 def create_estimator(model_config: Optional[ModelConfig] = None,

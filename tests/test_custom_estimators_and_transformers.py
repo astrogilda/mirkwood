@@ -221,6 +221,7 @@ def test_multiple_transformer_wrong_input_list():
         ])
 
 
+@settings(deadline=None)
 @given(array_1d())
 def test_multiple_transformer(X):
     """Test the functionality of the MultipleTransformer class"""

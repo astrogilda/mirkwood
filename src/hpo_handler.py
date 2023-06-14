@@ -90,8 +90,9 @@ class HPOHandler:
         """
         self.params = params
         self.best_trial = None
+        self.weight_flag: bool = False
 
-    def objective(self, trial: Trial, X_train: np.ndarray, y_train: np.ndarray, weights: np.ndarray) -> float:
+    def objective(self, trial: Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
         """
         Objective function for Optuna hyperparameter optimization.
         """
@@ -109,20 +110,19 @@ class HPOHandler:
             else:
                 raise ValueError(f"Unsupported distribution: {distribution}")
 
-        # update parameters of the entire pipeline
+        # update parameters of the entire CustomTransformedTargetRegressor pipeline
         pipeline = self.params.estimator.estimator.set_params(**params)
 
         scores = []
         for train_index, val_index in self.params.cv:
             X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
             y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
-            weights_fold = weights[train_index]
 
-            pipeline.fit(X_train_fold, y_train_fold,
-                         sample_weight=weights_fold)
+            pipeline.fit(X=X_train_fold, y=y_train_fold,
+                         weight_flag=self.weight_flag)
 
             y_val_fold_pred_mean = pipeline.predict(X_val_fold)
-            y_val_fold_pred_std = pipeline.regressor_.named_steps['regressor'].predict_std(
+            y_val_fold_pred_std = pipeline.predict_std(
                 X_val_fold)
 
             score = self.params.loss(
@@ -131,21 +131,21 @@ class HPOHandler:
 
         return np.mean(scores)
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray, weights: np.ndarray) -> None:
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """
         Fit the pipeline to the training data.
         """
         study = optuna.create_study(
             direction='maximize')  # Change 'minimize' to 'maximize' if higher scores are better
         study.optimize(lambda trial: self.objective(
-            trial, X_train, y_train, weights), n_trials=self.params.n_trials)
+            trial, X_train, y_train), n_trials=self.params.n_trials)
 
         self.best_trial = study.best_trial
 
         best_params = self.best_trial.params
         self.params.estimator.estimator.set_params(**best_params)
         self.params.estimator.estimator.fit(
-            X_train, y_train, sample_weight=weights)
+            X_train, y_train, weight_flag=self.weight_flag)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -155,19 +155,14 @@ class HPOHandler:
             raise ValueError("You must call fit() before predict()")
         return self.params.estimator.estimator.predict(X)
 
-    def predict_dist(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def predict_std(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict the target variable for the given data using the pred_dist method.
-        This returns the mean and standard deviation of the predicted distribution,
-        as well as the upper and lower bounds.
+        Predict the standard deviation of the target variable for the given data.
         """
         if self.best_trial is None:
-            raise ValueError("You must call fit() before predict_dist()")
+            raise ValueError("You must call fit() before predict_std()")
 
-        y_pred = self.params.estimator.estimator.predict(X)
-        y_pred_std = self.params.estimator.estimator.regressor_.named_steps['regressor'].predict_std(
+        y_pred_std = self.params.estimator.estimator.predict_std(
             X)
-        y_pred_upper = y_pred + self.z_score * y_pred_std
-        y_pred_lower = y_pred - self.z_score * y_pred_std
 
-        return y_pred, y_pred_std, y_pred_lower, y_pred_upper
+        return y_pred_std
