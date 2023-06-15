@@ -12,6 +12,17 @@ from numba.core.errors import NumbaExperimentalFeatureWarning
 # Ignore the experimental feature warning
 warnings.filterwarnings('ignore', category=NumbaExperimentalFeatureWarning)
 
+# TODO: Add miscalibration_area and PICP metrics
+
+
+def calculate_z_score(confidence_level: float) -> float:
+    """
+    Calculate the z-score.
+    """
+    alpha = 1 - confidence_level
+    z_score = stats.norm.ppf(1 - alpha / 2)
+    return z_score
+
 
 @jit(nopython=True)
 def erf_numba(x):
@@ -140,13 +151,19 @@ def calculate_ace(yt: np.ndarray, yp_lower: np.ndarray, yp_upper: np.ndarray, co
     """ Calculate the average coverage error (ACE) for confidence intervals. """
     alpha = 1 - confint
     c = np.logical_and(yt >= yp_lower, yt <= yp_upper)
-    return np.nanmean(c) - (1 - alpha)
+    ace = np.nanmean(c) - (1 - alpha)
+    # ACE can be negative when empirical coverage is less than nominal coverage
+    # Negative ACE implies that the prediction intervals are too narrow
+    # Positive ACE implies that the prediction intervals are too wide
+    return ace
 
 
 @jit(nopython=True, parallel=True)
 def calculate_pinaw(yp_upper: np.ndarray, yp_lower: np.ndarray, iqr: float) -> float:
     """ Calculate the prediction interval normalized average width (PINAW). """
-    return np.mean(yp_upper - yp_lower) / iqr
+    pinaw = np.mean(yp_upper - yp_lower) / iqr
+    assert pinaw >= 0, "PINAW should be non-negative"
+    return pinaw
 
 
 @jit(nopython=True)
@@ -195,13 +212,14 @@ def calculate_interval_sharpness(yt: np.ndarray, yp: np.ndarray, yp_lower: np.nd
 
     # Compute the sharpness
     intsharp = np.nanmean(np.where(yt >= yp_upper,
-                                   -2 * alpha * delta_alpha -
-                                   4 * (yt - yp_upper),
+                                   np.abs(-2 * alpha * delta_alpha -
+                                          4 * (yt - yp_upper)),
                                    np.where(yp_lower >= yt,
-                                            -2 * alpha * delta_alpha -
-                                            4 * (yp_lower - yt),
-                                            -2 * alpha * delta_alpha)))
+                                            np.abs(-2 * alpha * delta_alpha -
+                                                   4 * (yp_lower - yt)),
+                                            np.abs(-2 * alpha * delta_alpha))))
 
+    assert intsharp >= 0, "Interval sharpness must be non-negative."
     return intsharp
 
 
@@ -250,6 +268,7 @@ def calculate_gaussian_crps(yt: np.ndarray, yp: np.ndarray, yp_lower: np.ndarray
         crps_array[i] = _gaussian_crps(yt[i], yp[i], sigma[i])
 
     mean_crps = np.nanmean(crps_array)
+    assert mean_crps >= 0, "CRPS must be non-negative."
     return mean_crps
 
 

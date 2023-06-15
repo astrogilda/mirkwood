@@ -26,7 +26,7 @@ class BootstrapHandler(BaseModel):
         description="The z-score for the confidence interval. Defaults to 1.96, which corresponds to a 95 per cent confidence interval."
     )
 
-    def bootstrap_func_mp(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def bootstrap_func_mp(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform bootstrapping for model training and prediction.
 
@@ -71,4 +71,4 @@ class BootstrapHandler(BaseModel):
         y_pred_std = (mask(y_pred_upper) -
                       mask(y_pred_lower))/2
 
-        return mask(self.model_handler.y_val), mask(y_pred_mean), mask(y_pred_std), mask(y_pred_lower), mask(y_pred_upper), mask(shap_values_mean)
+        return mask(self.model_handler.y_val), mask(y_pred_mean), mask(y_pred_std), mask(shap_values_mean)

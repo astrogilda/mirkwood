@@ -7,6 +7,8 @@ from src.data_handler import GalaxyProperty
 import random
 import string
 from numpy.testing import assert_almost_equal, assert_array_equal
+from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics
+from utils.metrics import calculate_z_score
 
 # Test Data
 X_train = np.random.rand(50, 3).astype(np.float64)
@@ -51,25 +53,46 @@ def test_BootstrapHandler_Validation():
 def test_bootstrap_func_mp():
     bootstrap_handler = BootstrapHandler(model_handler=model_handler)
 
-    y_val, y_pred_mean, y_pred_std, y_pred_lower, y_pred_upper, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
         iteration_num=0)
 
     # Assert the shapes are consistent
     assert_array_equal(y_val, bootstrap_handler.model_handler.y_val)
     assert y_pred_mean.shape == y_val.shape
     assert y_pred_std.shape == y_val.shape
-    assert y_pred_lower.shape == y_val.shape
-    assert y_pred_upper.shape == y_val.shape
     assert shap_values_mean.shape == (
         y_val.shape[0], X_train.shape[1])
 
-    # Assert that the predicted means are within the expected range
-    assert np.all(y_pred_mean >= y_pred_lower)
-    assert np.all(y_pred_mean <= y_pred_upper)
-
-    # Assert that the confidence intervals have the expected relationship
-    assert_almost_equal(y_pred_upper - y_pred_mean,
-                        y_pred_mean - y_pred_lower)
+    # Assert that the standard deviations are positive
+    assert np.all(y_pred_std >= 0)
 
     # Assert that SHAP values are finite
     assert np.all(np.isfinite(shap_values_mean))
+
+
+def test_bootstrap_func_mp_metrics():
+    # Test that the metrics are calculated correctly
+    bootstrap_handler = BootstrapHandler(model_handler=model_handler)
+    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+        iteration_num=0)
+
+    confidence_level = 0.95
+    z_score = calculate_z_score(confidence_level=confidence_level)
+
+    deterministic_error_metrics_handler = DeterministicErrorMetrics(
+        yp=y_pred_mean, yt=y_val)
+    assert isinstance(deterministic_error_metrics_handler.nrmse(), float)
+    assert isinstance(deterministic_error_metrics_handler.nmae(), float)
+    assert isinstance(deterministic_error_metrics_handler.medianae(), float)
+    assert isinstance(deterministic_error_metrics_handler.mape(), float)
+    assert isinstance(deterministic_error_metrics_handler.bias(), float)
+    assert isinstance(deterministic_error_metrics_handler.nbe(), float)
+
+    probabilistic_error_metrics_handler = ProbabilisticErrorMetrics(
+        yp=y_pred_mean, yt=y_val, yp_lower=y_pred_mean - z_score * y_pred_std, yp_upper=y_pred_mean + z_score * y_pred_std)
+    assert isinstance(
+        probabilistic_error_metrics_handler.gaussian_crps(), float)
+    assert isinstance(probabilistic_error_metrics_handler.ace(), float)
+    assert isinstance(probabilistic_error_metrics_handler.pinaw(), float)
+    assert isinstance(
+        probabilistic_error_metrics_handler.interval_sharpness(), float)

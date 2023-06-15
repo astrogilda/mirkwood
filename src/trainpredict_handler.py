@@ -16,6 +16,7 @@ from pydantic.fields import ModelField
 from utils.custom_cv import CustomCV
 from src.model_handler import ModelConfig, ModelHandler
 from utils.custom_transformers_and_estimators import XTransformer, YTransformer, create_estimator
+from utils.metrics import calculate_z_score
 
 import pandas as pd
 from pydantic import BaseModel, Field, root_validator
@@ -128,14 +129,6 @@ class TrainPredictHandler(BaseModel):
         X_noisy = np.log10(1 + np.clip(a=X_noisy_nonlog, a_min=0., a_max=None))
         return X_noisy
 
-    def calculate_z_score(self) -> float:
-        """
-        Calculate the z-score.
-        """
-        alpha = 1 - self.confidence_level
-        z_score = stats.norm.ppf(1 - alpha / 2)
-        return z_score
-
     def train_predict(self) -> Tuple:
         """
         Train and predict using the pipeline.
@@ -170,7 +163,7 @@ class TrainPredictHandler(BaseModel):
             y_train, y_val = self.y[train_idx], self.y[val_idx]
 
             # calculate the z-score
-            z_score = self.calculate_z_score()
+            z_score = calculate_z_score(confidence_level=self.confidence_level)
 
             # carry out hyperparameter tuning
             timeout = 60 * 60  # 1 hour
@@ -225,15 +218,13 @@ class TrainPredictHandler(BaseModel):
         Process the output from the bootstrap handler.
         Returns tuples of prediction mean, std, lower, upper, epis std, and mean shap.
         """
-        orig_array, mu_array, std_array, lower_array, upper_array, shap_mu_array = np.array(
+        orig_array, mu_array, std_array, shap_mu_array = np.array(
             concat_output).T
 
         # avoid infs. from std_array. repeat for mu_array just in case.
         orig_array = np.ma.masked_invalid(orig_array)
         mu_array = np.ma.masked_invalid(mu_array)
         std_array = np.ma.masked_invalid(std_array)
-        lower_array = np.ma.masked_invalid(lower_array)
-        upper_array = np.ma.masked_invalid(upper_array)
         shap_mu_array = np.ma.masked_invalid(shap_mu_array)
 
         yval_pred_mean = np.ma.mean(mu_array, axis=0)
