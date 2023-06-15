@@ -1,9 +1,16 @@
 from numba import jit, prange
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, confloat
 from functools import lru_cache
 import math
 from typing import Tuple
+import scipy.stats as stats
+
+import warnings
+from numba.core.errors import NumbaExperimentalFeatureWarning
+
+# Ignore the experimental feature warning
+warnings.filterwarnings('ignore', category=NumbaExperimentalFeatureWarning)
 
 
 @jit(nopython=True)
@@ -126,6 +133,8 @@ class DeterministicErrorMetrics(ErrorMetricsBase):
         return calculate_nbe(self.yt, self.yp, self.get_iqr())
 
 
+#### Probabilistic metrics ####
+
 @jit(nopython=True, parallel=True)
 def calculate_ace(yt: np.ndarray, yp_lower: np.ndarray, yp_upper: np.ndarray, confint: float) -> float:
     """ Calculate the average coverage error (ACE) for confidence intervals. """
@@ -149,18 +158,50 @@ def calculate_cdf_normdist(yt, loc, scale):
 
 @jit(nopython=True, parallel=True)
 def calculate_interval_sharpness(yt: np.ndarray, yp: np.ndarray, yp_lower: np.ndarray, yp_upper: np.ndarray, confint: float) -> float:
-    """ Calculate the interval sharpness. """
+    """ 
+    Calculate the interval sharpness of probabilistic predictions.
 
+    Parameters
+    ----------
+    yt : np.ndarray
+        True target values.
+    yp : np.ndarray
+        Predicted target values.
+    yp_lower : np.ndarray
+        Lower bounds of the prediction intervals.
+    yp_upper : np.ndarray
+        Upper bounds of the prediction intervals.
+    confint : float
+        Confidence interval level.
+
+    Returns
+    -------
+    float
+        Interval sharpness.
+    """
+
+    # Transform true targets into percentiles
     for i in prange(yt.shape[0]):
         yt[i] = calculate_cdf_normdist(
             yt[i], yp[i], 0.5 * (yp_upper[i] - yp_lower[i]))
 
+    # Define the lower and upper bounds of the prediction intervals
     alpha = 1 - confint
     yp_lower = np.ones_like(yp_lower) * (0.5 - confint / 2)
     yp_upper = np.ones_like(yp_upper) * (0.5 + confint / 2)
+
+    # Compute the differences between the bounds
     delta_alpha = yp_upper - yp_lower
-    intsharp = np.nanmean(np.where(yt >= yp_upper, -2 * alpha * delta_alpha - 4 * (yt - yp_upper),
-                                   np.where(yp_lower >= yt, -2 * alpha * delta_alpha - 4 * (yp_lower - yt), -2 * alpha * delta_alpha)))
+
+    # Compute the sharpness
+    intsharp = np.nanmean(np.where(yt >= yp_upper,
+                                   -2 * alpha * delta_alpha -
+                                   4 * (yt - yp_upper),
+                                   np.where(yp_lower >= yt,
+                                            -2 * alpha * delta_alpha -
+                                            4 * (yp_lower - yt),
+                                            -2 * alpha * delta_alpha)))
+
     return intsharp
 
 
@@ -219,6 +260,8 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
                                  description="Lower bound of predicted values")
     yp_upper: np.ndarray = Field(...,
                                  description="Upper bound of predicted values")
+    confidence_level: confloat(gt=0, le=1) = Field(
+        0.6827, description="Confidence level")
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -232,7 +275,7 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
         assert np.all(
             self.yp > self.yp_lower), "yp should be greater than yp_lower"
 
-    def ace(self, confint: float = 0.6827) -> float:
+    def ace(self) -> float:
         """
         Calculate the average coverage error (ACE) for confidence intervals.
 
@@ -246,7 +289,7 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
         float
             Average coverage error.
         """
-        return calculate_ace(self.yt, self.yp_lower, self.yp_upper, confint)
+        return calculate_ace(self.yt, self.yp_lower, self.yp_upper, confint=self.confidence_level)
 
     def pinaw(self) -> float:
         """
@@ -259,7 +302,7 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
         """
         return calculate_pinaw(self.yp_upper, self.yp_lower, self.get_iqr())
 
-    def interval_sharpness(self, confint: float = 0.6827) -> float:
+    def interval_sharpness(self) -> float:
         """
         Calculate the interval sharpness.
 
@@ -273,7 +316,7 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
         float
             Interval sharpness.
         """
-        return calculate_interval_sharpness(self.yt, self.yp, self.yp_lower, self.yp_upper, confint)
+        return calculate_interval_sharpness(self.yt, self.yp, self.yp_lower, self.yp_upper, confint=self.confidence_level)
 
     def gaussian_crps(self) -> float:
         return calculate_gaussian_crps(self.yt, self.yp, self.yp_lower, self.yp_upper)

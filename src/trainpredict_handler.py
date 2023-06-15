@@ -203,8 +203,8 @@ class TrainPredictHandler(BaseModel):
                 model_handler=model_handler, frac_samples_best=self.frac_samples_best, galaxy_property=self.galaxy_property, z_score=z_score)
 
             with Pool(self.n_jobs_bs) as p:
-                args = ((bootstrap_handler, j, self.property_name,
-                        self.testfoldnum) for j in range(self.num_bs_inner))
+                args = ((bootstrap_handler, j)
+                        for j in range(self.num_bs_inner))
                 concat_output = p.starmap(
                     BootstrapHandler.bootstrap_func_mp, args)
 

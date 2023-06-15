@@ -68,11 +68,12 @@ def test_deterministic_metrics_calculations(yt_yp: Tuple[List[float], List[float
 def test_probabilistic_metrics_initialization(yt_yp_lower_upper: Tuple[List[float], Tuple[List[float], List[float], List[float]]]):
     yt, (yp, yp_lower, yp_upper) = yt_yp_lower_upper
     probabilistic_metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=np.array(
-        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper))
+        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper), confidence_level=0.95)
     assert isinstance(probabilistic_metrics.yt, np.ndarray)
     assert isinstance(probabilistic_metrics.yp, np.ndarray)
     assert isinstance(probabilistic_metrics.yp_lower, np.ndarray)
     assert isinstance(probabilistic_metrics.yp_upper, np.ndarray)
+    assert probabilistic_metrics.confidence_level == 0.95
     assert len(probabilistic_metrics.yt) == len(probabilistic_metrics.yp) == len(
         probabilistic_metrics.yp_lower) == len(probabilistic_metrics.yp_upper), "Sizes of yt, yp, yp_lower and yp_upper should match"
 
@@ -82,7 +83,7 @@ def test_probabilistic_metrics_initialization(yt_yp_lower_upper: Tuple[List[floa
 def test_probabilistic_metrics_calculations(yt_yp_lower_upper: Tuple[List[float], Tuple[List[float], List[float], List[float]]]):
     yt, (yp, yp_lower, yp_upper) = yt_yp_lower_upper
     probabilistic_metrics = ProbabilisticErrorMetrics(yt=np.array(yt), yp=np.array(
-        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper))
+        yp), yp_lower=np.array(yp_lower), yp_upper=np.array(yp_upper), confidence_level=0.95)
     assert isinstance(probabilistic_metrics.ace(), float)
     assert isinstance(probabilistic_metrics.pinaw(), float)
     assert isinstance(probabilistic_metrics.interval_sharpness(), float)
