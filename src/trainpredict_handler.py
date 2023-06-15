@@ -169,9 +169,14 @@ class TrainPredictHandler(BaseModel):
             X_train, X_val = self.X[train_idx], self.X[val_idx]
             y_train, y_val = self.y[train_idx], self.y[val_idx]
 
+            # calculate the z-score
+            z_score = self.calculate_z_score()
+
             # carry out hyperparameter tuning
+            timeout = 60 * 60  # 1 hour
+            n_trials = 100
             hpo_handler = HPOHandler(params=HPOHandlerParams(estimator=estimator,
-                                                             cv=cv_inner, z_score=self.calculate_z_score(), n_jobs=self.n_jobs_hpo).dict())
+                                                             cv=cv_inner, z_score=z_score, n_jobs=self.n_jobs_hpo, timeout=timeout, n_trials=n_trials), weight_flag=self.weight_flag)
             hpo_handler.fit(X_train=X_train, y_train=y_train)
             best_estimator = hpo_handler.params.estimator
 
@@ -188,10 +193,10 @@ class TrainPredictHandler(BaseModel):
                 file_path=self.file_path,
                 shap_file_path=self.shap_file_path,
                 weight_flag=self.weight_flag,
+                model_config=self.model_config,
+                X_transformer=self.X_transformer,
+                y_transformer=self.y_transformer,
             )
-
-            # calculate the z-score
-            z_score = self.calculate_z_score()
 
             # create a BootstrapHandler for each fold
             bootstrap_handler = BootstrapHandler(
@@ -220,10 +225,11 @@ class TrainPredictHandler(BaseModel):
         Process the output from the bootstrap handler.
         Returns tuples of prediction mean, std, lower, upper, epis std, and mean shap.
         """
-        mu_array, std_array, lower_array, upper_array, shap_mu_array = np.array(
+        orig_array, mu_array, std_array, lower_array, upper_array, shap_mu_array = np.array(
             concat_output).T
 
         # avoid infs. from std_array. repeat for mu_array just in case.
+        orig_array = np.ma.masked_invalid(orig_array)
         mu_array = np.ma.masked_invalid(mu_array)
         std_array = np.ma.masked_invalid(std_array)
         lower_array = np.ma.masked_invalid(lower_array)

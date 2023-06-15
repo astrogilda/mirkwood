@@ -55,13 +55,11 @@ class BootstrapHandler(BaseModel):
 
         self.model_handler.fit()
         y_pred_mean, y_pred_std = self.model_handler.predict(
-            X_test=X_res, return_std=True)
+            X_test=self.model_handler.X_val, return_std=True)
         shap_values_mean = self.model_handler.calculate_shap_values(
-            X_test=X_res)
+            X_test=self.model_handler.X_val)
         y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
             y_pred_std, y_pred_mean + self.z_score * y_pred_std
-        print(y_pred_lower)
-        print(y_pred_upper)
         # Postprocess prediction values
         y_pred_upper, y_pred_lower, y_pred_mean = DataHandler().postprocess_y(
             (y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
@@ -73,4 +71,4 @@ class BootstrapHandler(BaseModel):
         y_pred_std = (mask(y_pred_upper) -
                       mask(y_pred_lower))/2
 
-        return mask(y_res), mask(y_pred_mean), mask(y_pred_std), mask(y_pred_lower), mask(y_pred_upper), mask(shap_values_mean)
+        return mask(self.model_handler.y_val), mask(y_pred_mean), mask(y_pred_std), mask(y_pred_lower), mask(y_pred_upper), mask(shap_values_mean)

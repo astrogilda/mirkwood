@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from src.data_handler import GalaxyProperty
 import random
 import string
-from numpy.testing import assert_almost_equal
+from numpy.testing import assert_almost_equal, assert_array_equal
 
 # Test Data
 X_train = np.random.rand(50, 3).astype(np.float64)
@@ -51,16 +51,17 @@ def test_BootstrapHandler_Validation():
 def test_bootstrap_func_mp():
     bootstrap_handler = BootstrapHandler(model_handler=model_handler)
 
-    y_train_resampled, y_pred_mean, y_pred_std, y_pred_lower, y_pred_upper, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+    y_val, y_pred_mean, y_pred_std, y_pred_lower, y_pred_upper, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
         iteration_num=0)
 
     # Assert the shapes are consistent
-    assert y_pred_mean.shape == y_train_resampled.shape
-    assert y_pred_std.shape == y_train_resampled.shape
-    assert y_pred_lower.shape == y_train_resampled.shape
-    assert y_pred_upper.shape == y_train_resampled.shape
+    assert_array_equal(y_val, bootstrap_handler.model_handler.y_val)
+    assert y_pred_mean.shape == y_val.shape
+    assert y_pred_std.shape == y_val.shape
+    assert y_pred_lower.shape == y_val.shape
+    assert y_pred_upper.shape == y_val.shape
     assert shap_values_mean.shape == (
-        y_train_resampled.shape[0], X_train.shape[1])
+        y_val.shape[0], X_train.shape[1])
 
     # Assert that the predicted means are within the expected range
     assert np.all(y_pred_mean >= y_pred_lower)
