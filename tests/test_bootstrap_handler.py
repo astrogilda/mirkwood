@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 import pytest
 import numpy as np
 from src.model_handler import ModelHandler, ModelConfig
@@ -7,8 +8,7 @@ from src.data_handler import GalaxyProperty
 import random
 import string
 from numpy.testing import assert_almost_equal, assert_array_equal
-from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics
-from utils.metrics import calculate_z_score
+from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics, calculate_z_score
 
 # Test Data
 X_train = np.random.rand(50, 3).astype(np.float64)
@@ -96,3 +96,12 @@ def test_bootstrap_func_mp_metrics():
     assert isinstance(probabilistic_error_metrics_handler.pinaw(), float)
     assert isinstance(
         probabilistic_error_metrics_handler.interval_sharpness(), float)
+
+
+n_jobs_bs = 10
+
+with Pool(n_jobs_bs) as p:
+    args = ((bootstrap_handler, j)
+            for j in range(self.num_bs_inner))
+    concat_output = p.starmap(
+        BootstrapHandler.bootstrap_func_mp, args)

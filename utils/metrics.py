@@ -223,28 +223,27 @@ def calculate_interval_sharpness(yt: np.ndarray, yp: np.ndarray, yp_lower: np.nd
     return intsharp
 
 
-# @vectorize([float64(float64, float64, float64)], target='parallel')
 @jit(nopython=True)
-def _gaussian_crps(y_true: np.ndarray, mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
+def _gaussian_crps(y_true: float, mu: float, sigma: float) -> float:
     """
-    Compute the Continuous Ranked Probability Score (CRPS) for arrays with the help of Numba.
+    Compute the Continuous Ranked Probability Score (CRPS) for Gaussian distribution.
 
     Parameters
     ----------
-    y_true: np.ndarray
-        The array of true values.
-    mu: np.ndarray
-        The array of means of the predicted Gaussian distributions.
-    sigma: np.ndarray
-        The array of standard deviations of the predicted Gaussian distributions.
+    y_true: float
+        The true value.
+    mu: float
+        The mean of the predicted Gaussian distribution.
+    sigma: float
+        The standard deviation of the predicted Gaussian distribution.
 
     Returns
     -------
-    np.ndarray
-        The array of CRPS of the predictions.
+    float
+        The CRPS of the prediction.
     """
     # normalization for the Gaussian distribution
-    y_true_normalized = (y_true - mu) / sigma
+    y_true_normalized = (y_true - mu) / (sigma + EPS)
 
     # the cumulative distribution function (CDF) of the Gaussian distribution
     phi = 0.5 * (1 + erf_numba(y_true_normalized / np.sqrt(2)))
@@ -261,14 +260,14 @@ def _gaussian_crps(y_true: np.ndarray, mu: np.ndarray, sigma: np.ndarray) -> np.
 
 @jit(nopython=True, parallel=True)
 def calculate_gaussian_crps(yt: np.ndarray, yp: np.ndarray, yp_lower: np.ndarray, yp_upper: np.ndarray) -> float:
-    """ Calculate Gaussian CRPS. """
+    """ Calculate Gaussian CRPS. Lower is better. 0 is perfect."""
     sigma = 0.5 * (yp_upper - yp_lower)
     crps_array = np.ones_like(yt)
     for i in prange(yt.shape[0]):
         crps_array[i] = _gaussian_crps(yt[i], yp[i], sigma[i])
 
     mean_crps = np.nanmean(crps_array)
-    assert mean_crps >= 0, "CRPS must be non-negative."
+    assert mean_crps >= 0, "CRPS should be non-negative"
     return mean_crps
 
 

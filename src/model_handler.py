@@ -54,13 +54,6 @@ class ModelHandler(BaseModel):
         except NotFittedError:
             return False
 
-    @validator('estimator', pre=True)
-    def validate_estimator(cls, v: Optional[CustomTransformedTargetRegressor]) -> Optional[CustomTransformedTargetRegressor]:
-        """Ensure provided estimator is of type CustomTransformedTargetRegressor"""
-        if v is not None and not isinstance(v, CustomTransformedTargetRegressor):
-            raise ValueError('Invalid estimator')
-        return v
-
     def fit(self) -> None:
         """Fit the estimator to the data, and save to a file if provided. If fitting_mode is False, load the estimator from a file."""
         if self.fitting_mode:
@@ -106,7 +99,6 @@ class ModelHandler(BaseModel):
                     data = shap.kmeans(self.X_train, 100)
                 else:
                     data = self.X_train
-                print(f"data.shape = {data.shape}")
                 explainer_mean = shap.TreeExplainer(
                     base_model, data=data, model_output=0, feature_names=self.feature_names)
                 shap_values_mean = explainer_mean.shap_values(

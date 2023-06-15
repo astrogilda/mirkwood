@@ -352,6 +352,18 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
                      X_transformer: Optional[XTransformer] = None,
                      y_transformer: Optional[YTransformer] = None) -> CustomTransformedTargetRegressor:
 
+    if not isinstance(model_config, ModelConfig) and model_config is not None:
+        raise TypeError(
+            f'model_config must be an instance of ModelConfig or None. Got {type(model_config)} instead.')
+
+    if not isinstance(X_transformer, XTransformer) and X_transformer is not None:
+        raise TypeError(
+            f'X_transformer must be an instance of XTransformer or None. Got {type(X_transformer)} instead.')
+
+    if not isinstance(y_transformer, YTransformer) and y_transformer is not None:
+        raise TypeError(
+            f'y_transformer must be an instance of YTransformer or None. Got {type(y_transformer)} instead.')
+
     if model_config is None:
         model_config = ModelConfig()
 

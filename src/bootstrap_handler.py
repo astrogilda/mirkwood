@@ -61,8 +61,8 @@ class BootstrapHandler(BaseModel):
         y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
             y_pred_std, y_pred_mean + self.z_score * y_pred_std
         # Postprocess prediction values
-        y_pred_upper, y_pred_lower, y_pred_mean = DataHandler().postprocess_y(
-            (y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
+        y_val, y_pred_upper, y_pred_lower, y_pred_mean = DataHandler().postprocess_y(
+            (self.model_handler.y_val, y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
 
         # Create mask for invalid values
         mask = np.ma.masked_invalid
@@ -71,4 +71,4 @@ class BootstrapHandler(BaseModel):
         y_pred_std = (mask(y_pred_upper) -
                       mask(y_pred_lower))/2
 
-        return mask(self.model_handler.y_val), mask(y_pred_mean), mask(y_pred_std), mask(shap_values_mean)
+        return mask(y_val), mask(y_pred_mean), mask(y_pred_std), mask(shap_values_mean)

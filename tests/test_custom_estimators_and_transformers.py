@@ -6,6 +6,7 @@ from hypothesis import given, strategies as st, settings
 from random import shuffle
 from utils.custom_transformers_and_estimators import *
 from utils.custom_transformers_and_estimators import _MultipleTransformer
+from utils.odds_and_ends import *
 
 from ngboost.distns import Normal
 from ngboost.scores import LogScore
@@ -24,7 +25,7 @@ def array_1d_and_2d(draw):
     n_repeat = n_elements - n_unique
 
     # feel free to adjust the range and size of this pool
-    elements_pool = np.linspace(-1000, 1000, 50000)
+    elements_pool = np.random.uniform(-1000, 1000, 50000)
     unique_elements = draw(st.lists(st.sampled_from(
         elements_pool), min_size=n_unique, max_size=n_unique, unique=True))
 
@@ -125,10 +126,14 @@ def test_customngbregressor_fit_and_predict(arrays):
     ngb = CustomNGBRegressor()
     ngb.fit(X_train, y_train, sample_weight=sample_weight, X_val=X_val,
             y_val=y_val, val_sample_weight=val_sample_weight)
-    preds = ngb.predict(X)
 
+    preds = ngb.predict(X)
     assert isinstance(preds, np.ndarray)
     assert preds.shape[0] == X.shape[0]
+
+    preds_std = ngb.predict_std(X)
+    assert isinstance(preds_std, np.ndarray)
+    assert preds_std.shape[0] == X.shape[0]
 
 
 @given(array_2d())
@@ -288,3 +293,92 @@ def test_create_estimator_None(arrays):
     y_pred_std = ttr.predict_std(X)
     # Check shape of predicted std
     assert y_pred_std.shape == y.flatten().shape
+
+
+def test_create_estimator_invalid():
+    """Test create_estimator's response to invalid input"""
+    # with pytest.raises(TypeError):
+    #    create_estimator("not a ModelConfig", None, None)
+    with pytest.raises(TypeError):
+        create_estimator(None, "not a XTransformer", None)
+    with pytest.raises(TypeError):
+        create_estimator(None, None, "not a YTransformer")
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=10)
+def test_xtransformer_passing_and_inverse_transforming(array):
+    # Define the transformer configuration
+    x_transformer = XTransformer()
+
+    # Loop over each transformer in the XTransformer
+    for transformer_config in x_transformer.transformers:
+
+        # Fit and transform
+        transformed_array = transformer_config.transformer.fit_transform(array)
+
+        # Test inverse transform right after the transformation
+        inversed_array = transformer_config.transformer.inverse_transform(
+            transformed_array)
+        assert_almost_equal(inversed_array, array)
+
+
+@given(array_1d())
+@settings(deadline=None, max_examples=10)
+def test_ytransformer_passing_and_inverse_transforming(array):
+    # Define the transformer configuration
+    y_transformer = YTransformer()
+
+    # Loop over each transformer in the XTransformer
+    for transformer_config in y_transformer.transformers:
+
+        # Fit and transform
+        transformed_array = transformer_config.transformer.fit_transform(
+            reshape_to_2d_array(array))
+
+        # Test inverse transform right after the transformation
+        inversed_array = transformer_config.transformer.inverse_transform(
+            reshape_to_2d_array(transformed_array))
+        assert_almost_equal(reshape_to_1d_array(inversed_array), array)
+
+
+@given(array_1d_and_2d())
+@settings(
+    deadline=None, max_examples=10
+)
+def test_custom_transformed_target_regressor(arrays):
+    """Test fitting, transforming and predicting of the CustomTransformedTargetRegressor class"""
+    y, X = arrays
+    X = np.nan_to_num(X)  # replace infinities with large finite numbers
+    y = np.nan_to_num(y)  # replace infinities with large finite numbers
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
+
+    # Instantiate transformers
+    X_transformer = XTransformer()
+    y_transformer = YTransformer()
+
+    # Instantiate the regressor
+    ngb = CustomNGBRegressor()
+
+    pipeline_X = Pipeline([(transformer.name, transformer.transformer)
+                          for transformer in X_transformer.transformers])
+    pipeline_y = _MultipleTransformer(y_transformer=y_transformer)
+    feature_pipeline = Pipeline([
+        ('preprocessor', pipeline_X),
+        ('regressor', ngb)
+    ])
+    ttr = CustomTransformedTargetRegressor(regressor=feature_pipeline,
+                                           transformer=pipeline_y)
+
+    # Fit and make predictions
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+    y_pred = ttr.predict(X)
+
+    # Fit the base regressor for comparison
+    ngb.fit(X_train, y_train)
+    y_pred_base = ngb.predict(X)
+
+    # Predictions made by CustomTransformedTargetRegressor should be similar to those made by the base estimator
+    assert_almost_equal(y_pred, y_pred_base, decimal=5)

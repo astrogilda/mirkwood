@@ -38,6 +38,8 @@ class TrainPredictHandler(BaseModel):
     n_folds_inner: int = Field(default=5, ge=2, le=20)
     num_bs_inner: int = Field(50, alias="NUM_BS_INNER")
     num_bs_outer: int = Field(50, alias="NUM_BS_OUTER")
+    n_jobs_hpo: Optional[int] = Field(
+        default=-1, ge=-1, description="Number of HPO jobs to run in parallel")
     X_noise_percent: float = Field(default=None, ge=0, le=1)
     X_transformer: XTransformer = XTransformer()  # Default XTransformer
     y_transformer: YTransformer = YTransformer()  # Default YTransformer
@@ -48,20 +50,16 @@ class TrainPredictHandler(BaseModel):
     testfoldnum: int = 0
     fitting_mode: bool = True
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    n_jobs_bs: Optional[int] = Field(
-        default=-1, ge=-1, description="Number of bootstrap jobs to run in parallel")
-    n_jobs_hpo: Optional[int] = Field(
-        default=-1, ge=-1, description="Number of HPO jobs to run in parallel")
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
 
     class Config:
         arbitrary_types_allowed: bool = True
 
-    @validator('n_jobs_bs', 'n_jobs_hpo')
+    @validator('n_jobs_hpo')
     def check_n_jobs(cls, v):
         if v == 0:
-            raise ValueError('n_jobs_bs or n_jobs_hpo cannot be 0')
+            raise ValueError('n_jobs_hpo cannot be 0')
         return v
 
     @validator('file_path', pre=True)
@@ -195,7 +193,7 @@ class TrainPredictHandler(BaseModel):
             bootstrap_handler = BootstrapHandler(
                 model_handler=model_handler, frac_samples_best=self.frac_samples_best, galaxy_property=self.galaxy_property, z_score=z_score)
 
-            with Pool(self.n_jobs_bs) as p:
+            with Pool(self.num_bs_inner) as p:
                 args = ((bootstrap_handler, j)
                         for j in range(self.num_bs_inner))
                 concat_output = p.starmap(
