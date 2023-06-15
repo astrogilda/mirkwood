@@ -83,12 +83,6 @@ def test_data_handler_postprocess_y():
         ('log_metallicity', float),
         ('log_sfr', float),
     ])
-    dtype_no_log = np.dtype([
-        ('stellar_mass', float),
-        ('dust_mass', float),
-        ('metallicity', float),
-        ('sfr', float),
-    ])
     y_array = np.zeros(2, dtype=dtype)
     y_array['log_stellar_mass'] = [1, 2]
     y_array['log_dust_mass'] = [3, 4]
@@ -119,6 +113,13 @@ def test_data_handler_postprocess_y():
         y_array['log_sfr'], prop=GalaxyProperty.SFR)
     expected_output = np.zeros(2, dtype=float)
     expected_output = [9999999, 99999999]
+    np.testing.assert_array_equal(postprocessed_y, expected_output)
+
+    # test if postprocess_y raises an error when ys is a tuple of arrays
+    postprocessed_y = handler.postprocess_y(
+        (y_array['log_sfr'], y_array['log_sfr']), prop=GalaxyProperty.SFR)
+    expected_output = np.zeros(2, dtype=float)
+    expected_output = [[9999999, 99999999], [9999999, 99999999]]
     np.testing.assert_array_equal(postprocessed_y, expected_output)
 
 

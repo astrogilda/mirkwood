@@ -24,6 +24,7 @@ class ModelHandler(BaseModel):
     """
     X_train: np.ndarray
     y_train: np.ndarray
+    feature_names: List[str]
     X_val: Optional[np.ndarray] = None
     y_val: Optional[np.ndarray] = None
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
@@ -79,17 +80,17 @@ class ModelHandler(BaseModel):
                     f"File at {self.file_path or 'provided path'} not found.")
             self.estimator = load(self.file_path)
 
-    def predict(self, X_test: Optional[np.ndarray], return_bounds: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def predict(self, X_test: Optional[np.ndarray], return_std: bool = True) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         if self.fitting_mode and not self.is_fitted:
             raise NotFittedError("Estimator is not fitted.")
 
         X = X_test if X_test is not None else self.X_val
         predicted_mean = reshape_to_1d_array(self.estimator.predict(X))
         predicted_std = reshape_to_1d_array(
-            self.estimator.predict_std(X)) if return_bounds else None
+            self.estimator.predict_std(X)) if return_std else None
         return predicted_mean, predicted_std
 
-    def calculate_shap_values(self, X_test: Optional[np.ndarray], feature_names: List[str]) -> np.ndarray:
+    def calculate_shap_values(self, X_test: Optional[np.ndarray]) -> np.ndarray:
         """Calculate SHAP values, based on whether fitting mode is enabled or not. If not in fitting mode, load the SHAP explainer from a file."""
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -107,7 +108,7 @@ class ModelHandler(BaseModel):
                     data = self.X_train
                 print(f"data.shape = {data.shape}")
                 explainer_mean = shap.TreeExplainer(
-                    base_model, data=data, model_output=0, feature_names=feature_names)
+                    base_model, data=data, model_output=0, feature_names=self.feature_names)
                 shap_values_mean = explainer_mean.shap_values(
                     X, check_additivity=False)
                 if self.shap_file_path is not None:

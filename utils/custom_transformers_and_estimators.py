@@ -37,7 +37,8 @@ class ModelConfig(BaseModel):
     )
     Dist: Distn = Normal
     Score: Score = LogScore
-    n_estimators: conint(gt=0) = 500
+    n_estimators: conint(gt=0) = Field(
+        default=500, description="Number of estimators for NGBRegressor")
     learning_rate: confloat(gt=0, le=1) = Field(
         default=0.04,
         description="The learning rate for the NGBRegressor. Must be greater than 0 and less than or equal to 1."
@@ -214,13 +215,13 @@ class CustomNGBRegressor(NGBRegressor):
             val_sample_weight: Optional[np.ndarray] = None) -> 'CustomNGBRegressor':
         """Fit the model according to the given training data."""
         if y_val is not None:
-            y_val = y_val.ravel()
+            y_val = reshape_to_1d_array(y_val)
         if sample_weight is not None:
-            sample_weight = sample_weight.ravel()
+            sample_weight = reshape_to_1d_array(sample_weight)
         if val_sample_weight is not None:
-            val_sample_weight = val_sample_weight.ravel()
+            val_sample_weight = reshape_to_1d_array(val_sample_weight)
 
-        return super().fit(X=X, Y=y.ravel(), X_val=X_val, Y_val=y_val,
+        return super().fit(X=X, Y=reshape_to_1d_array(y), X_val=X_val, Y_val=y_val,
                            sample_weight=sample_weight, val_sample_weight=val_sample_weight)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -324,7 +325,7 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         Predict the target variable.
         """
         y_pred = self.predict_with_check(X, method_name='predict')
-        return self.inverse_transform_data(self.transformer_, y_pred).ravel()
+        return reshape_to_1d_array(self.inverse_transform_data(self.transformer_, y_pred))
 
     def predict_std(self, X: np.ndarray) -> np.ndarray:
         """

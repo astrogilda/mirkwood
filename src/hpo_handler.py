@@ -1,14 +1,18 @@
+from pydantic import BaseModel, Field, ValidationError
+from optuna import Study
+from typing import Union
 import numpy as np
 import optuna
 from optuna.trial import Trial
-from pydantic import BaseModel, Field, validator
-from sklearn.compose import TransformedTargetRegressor
-from typing import Callable, Optional, Tuple
+from pydantic import BaseModel, Field, conint, validator, confloat
+from typing import Callable, List, Optional, Tuple, Union
 
 from src.model_handler import ModelConfig
-from utils.custom_cv import CustomCV
 from utils.custom_transformers_and_estimators import XTransformer, YTransformer, CustomTransformedTargetRegressor, create_estimator
 from utils.metrics import ProbabilisticErrorMetrics
+
+# TODO: add option for loss to be None, which necessitates that the estimator has a score method. ie add such a method in custom_estimators_and_transformers.py
+# TODO: add limits for the distributions in ParamGridConfig
 
 
 def crps_scorer(y_true: np.ndarray, y_pred_mean: np.ndarray, y_pred_std: np.ndarray, z_score: float) -> float:
@@ -38,27 +42,6 @@ class ParamGridConfig(BaseModel):
         arbitrary_types_allowed: bool = True
 
 
-class PipelineConfig(BaseModel):
-    """
-    Pydantic model for the configuration of the pipeline.
-    """
-    estimator: CustomTransformedTargetRegressor = Field(
-        default=create_estimator(model_config=ModelConfig(), x_transformer=XTransformer(), y_transformer=YTransformer()))
-
-    class Config:
-        arbitrary_types_allowed: bool = True
-
-    @validator("estimator")
-    def check_model(cls, v):
-        """
-        Validator for estimator. Checks that estimator is an instance of TransformedTargetRegressor.
-        """
-        if not isinstance(v, TransformedTargetRegressor):
-            raise ValueError(
-                "estimator must be an instance of TransformedTargetRegressor")
-        return v
-
-
 class HPOHandlerParams(BaseModel):
     """
     Pydantic model for the parameters of HPOHandler.
@@ -67,30 +50,50 @@ class HPOHandlerParams(BaseModel):
         ParamGridConfig(),
         description="Parameter grid for hyperparameter optimization"
     )
-    n_trials: int = Field(100, gt=0)
-    timeout: Optional[int] = Field(30*60, gt=0)
-    loss: Optional[Callable] = crps_scorer
-    # Use the TransformedTargetRegressor with default parameters from PipelineConfig
-    estimator: PipelineConfig = PipelineConfig()
-    cv: CustomCV  # Accepts a cross-validator of type CustomCV
-    z_score: float = 1.96
+    n_trials: conint(ge=10) = Field(100)
+    timeout: Optional[conint(gt=0)] = Field(30*60)
+    n_jobs: Optional[int] = Field(
+        default=-1, ge=-1, description="Number of jobs to run in parallel")
+    loss: Optional[Callable] = Field(
+        crps_scorer, description="Loss function to optimize")
+    estimator: CustomTransformedTargetRegressor = Field(
+        default=create_estimator(model_config=ModelConfig(
+        ), X_transformer=XTransformer(), y_transformer=YTransformer()),
+        description="Estimator to be used for hyperparameter optimization"
+    )
+    cv: List[Tuple[np.ndarray, np.ndarray]
+             ] = Field(..., description="Cross validation splits")
+    z_score: confloat(gt=0, le=5) = Field(
+        default=1.96, description="The z-score for the confidence interval. Defaults to 1.96, which corresponds to a 95 per cent confidence interval.")
 
     class Config:
         arbitrary_types_allowed: bool = True
 
+    @validator('n_jobs')
+    def check_n_jobs(cls, v):
+        if v == 0:
+            raise ValueError('n_jobs cannot be 0')
+        return v
 
-class HPOHandler:
+
+class HPOHandler(BaseModel):
     """
     Handler for hyperparameter optimization.
     """
+    params: HPOHandlerParams = Field(...,
+                                     description="Parameters of HPOHandler")
+    # Do not use this directly, use is_model_fitted instead
+    best_trial: Optional[Trial] = None
+    weight_flag: bool = False
 
-    def __init__(self, params: HPOHandlerParams):
-        """
-        Initialize the handler with the given parameters.
-        """
-        self.params = params
-        self.best_trial = None
-        self.weight_flag: bool = False
+    class Config:
+        arbitrary_types_allowed: bool = True
+
+    @property
+    def is_model_fitted(self):
+        if self.best_trial is None:
+            raise ValueError("You must call fit() before predict()")
+        return True
 
     def objective(self, trial: Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
         """
@@ -111,7 +114,7 @@ class HPOHandler:
                 raise ValueError(f"Unsupported distribution: {distribution}")
 
         # update parameters of the entire CustomTransformedTargetRegressor pipeline
-        pipeline = self.params.estimator.estimator.set_params(**params)
+        pipeline = self.params.estimator.set_params(**params)
 
         scores = []
         for train_index, val_index in self.params.cv:
@@ -125,44 +128,43 @@ class HPOHandler:
             y_val_fold_pred_std = pipeline.predict_std(
                 X_val_fold)
 
-            score = self.params.loss(
-                y_val_fold, y_val_fold_pred_mean, y_val_fold_pred_std, self.params.z_score)
+            score = self.params.loss(y_true=y_val_fold, y_pred_mean=y_val_fold_pred_mean,
+                                     y_pred_std=y_val_fold_pred_std, z_score=self.params.z_score)
             scores.append(score)
 
         return np.mean(scores)
-
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        """
-        Fit the pipeline to the training data.
-        """
-        study = optuna.create_study(
-            direction='maximize')  # Change 'minimize' to 'maximize' if higher scores are better
-        study.optimize(lambda trial: self.objective(
-            trial, X_train, y_train), n_trials=self.params.n_trials)
-
-        self.best_trial = study.best_trial
-
-        best_params = self.best_trial.params
-        self.params.estimator.estimator.set_params(**best_params)
-        self.params.estimator.estimator.fit(
-            X_train, y_train, weight_flag=self.weight_flag)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
         Predict the target variable for the given data.
         """
-        if self.best_trial is None:
-            raise ValueError("You must call fit() before predict()")
-        return self.params.estimator.estimator.predict(X)
+        if self.is_model_fitted:
+            return self.params.estimator.predict(X)
 
     def predict_std(self, X: np.ndarray) -> np.ndarray:
         """
         Predict the standard deviation of the target variable for the given data.
         """
-        if self.best_trial is None:
-            raise ValueError("You must call fit() before predict_std()")
+        if self.is_model_fitted:
+            return self.params.estimator.predict_std(X)
 
-        y_pred_std = self.params.estimator.estimator.predict_std(
-            X)
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
+        """
+        Fit the pipeline to the training data.
+        """
+        study = optuna.create_study(direction='maximize')
+        study.optimize(lambda trial: self.objective(trial, X_train, y_train),
+                       n_trials=self.params.n_trials, timeout=self.params.timeout, n_jobs=self.params.n_jobs)
 
-        return y_pred_std
+        try:
+            self.best_trial = study.best_trial
+        except ValueError as e:
+            raise ValueError("No trials are completed yet.") from e
+
+        # Extract only the parameters that exist in the estimator
+        best_params = {param: value for param, value in self.best_trial.params.items()
+                       if param in self.params.estimator.get_params().keys()}
+
+        self.params.estimator.set_params(**best_params)
+        self.params.estimator.fit(
+            X_train, y_train, weight_flag=self.weight_flag)

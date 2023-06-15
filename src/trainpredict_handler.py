@@ -29,6 +29,7 @@ class TrainPredictHandler(BaseModel):
 
     X: np.ndarray
     y: np.ndarray
+    feature_names: List[str]
     X_test: Optional[np.ndarray] = None
     y_test: Optional[np.ndarray] = None
     confidence_level: float = Field(0.67, gt=0, le=1)
@@ -46,12 +47,21 @@ class TrainPredictHandler(BaseModel):
     testfoldnum: int = 0
     fitting_mode: bool = True
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    n_workers: int = 1  # control the number of workers
+    n_jobs_bs: Optional[int] = Field(
+        default=-1, ge=-1, description="Number of bootstrap jobs to run in parallel")
+    n_jobs_hpo: Optional[int] = Field(
+        default=-1, ge=-1, description="Number of HPO jobs to run in parallel")
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
 
     class Config:
         arbitrary_types_allowed: bool = True
+
+    @validator('n_jobs_bs', 'n_jobs_hpo')
+    def check_n_jobs(cls, v):
+        if v == 0:
+            raise ValueError('n_jobs_bs or n_jobs_hpo cannot be 0')
+        return v
 
     @validator('file_path', pre=True)
     def validate_file_path(cls, value, values):
@@ -160,16 +170,17 @@ class TrainPredictHandler(BaseModel):
             y_train, y_val = self.y[train_idx], self.y[val_idx]
 
             # carry out hyperparameter tuning
-            hpo_handler = HPOHandler(params=HPOHandlerParams(estimator=PipelineConfig(estimator=estimator),
-                                                             cv=cv_inner, z_score=self.calculate_z_score()))
+            hpo_handler = HPOHandler(params=HPOHandlerParams(estimator=estimator,
+                                                             cv=cv_inner, z_score=self.calculate_z_score(), n_jobs=self.n_jobs_hpo).dict())
             hpo_handler.fit(X_train=X_train, y_train=y_train)
-            best_estimator = hpo_handler.params.estimator.estimator
+            best_estimator = hpo_handler.params.estimator
 
             # setup the model handler with the best estimator found using HPO, and the right training and validation data
 
             model_handler = ModelHandler(
                 X_train=X_train,
                 y_train=y_train,
+                feature_names=self.feature_names,
                 X_val=X_val,
                 y_val=y_val,
                 estimator=best_estimator,
@@ -186,7 +197,7 @@ class TrainPredictHandler(BaseModel):
             bootstrap_handler = BootstrapHandler(
                 model_handler=model_handler, frac_samples_best=self.frac_samples_best, galaxy_property=self.galaxy_property, z_score=z_score)
 
-            with Pool(self.n_workers) as p:
+            with Pool(self.n_jobs_bs) as p:
                 args = ((bootstrap_handler, j, self.property_name,
                         self.testfoldnum) for j in range(self.num_bs_inner))
                 concat_output = p.starmap(

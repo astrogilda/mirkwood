@@ -262,7 +262,7 @@ class DataHandler:
             for key, func in self.inverse_transforms.items():
                 # only apply the inverse transform for the given prop
                 if prop.value in key.replace("log_", ""):
-                    postprocessed_y = func(y)  # func(y[key])
+                    postprocessed_y = func(y)
             postprocessed_ys.append(postprocessed_y)
 
         # Return tuple if more than one array, else return the single array

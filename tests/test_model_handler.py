@@ -2,13 +2,12 @@ import os
 from pathlib import Path
 import numpy as np
 import pytest
-from hypothesis import given, strategies as st
-from typing import List
 from sklearn.preprocessing import StandardScaler
-from ngboost import NGBRegressor
 from src.model_handler import ModelHandler
 from utils.custom_transformers_and_estimators import TransformerConfig
 from sklearn.exceptions import NotFittedError
+import random
+import string
 
 
 @pytest.fixture(scope='function')
@@ -16,7 +15,13 @@ def dummy_model_handler():
     """Return a ModelHandler instance with dummy data."""
     X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     y = np.array([1, 2, 3])
-    return ModelHandler(X_train=X, y_train=y, X_transformer=TransformerConfig(name="standard_scaler", transformer=StandardScaler()), y_transformer=TransformerConfig(name="standard_scaler", transformer=StandardScaler()), estimator=None)
+    feature_names = []
+    for _ in range(3):
+        random_string = ''.join(random.choices(
+            string.ascii_letters + string.digits, k=10))
+        feature_names.append(random_string)
+
+    return ModelHandler(X_train=X, y_train=y, X_transformer=TransformerConfig(name="standard_scaler", transformer=StandardScaler()), y_transformer=TransformerConfig(name="standard_scaler", transformer=StandardScaler()), estimator=None, feature_names=feature_names)
 
 
 def test_fit(dummy_model_handler: ModelHandler):
@@ -32,7 +37,7 @@ def test_predict_not_fitted(dummy_model_handler: ModelHandler):
     """
     x_val = np.random.randn(10, 3)
     with pytest.raises(NotFittedError):
-        dummy_model_handler.predict(X_test=x_val, return_bounds=False)
+        dummy_model_handler.predict(X_test=x_val, return_std=False)
 
 
 def test_predict_fitted(dummy_model_handler: ModelHandler):
@@ -42,12 +47,12 @@ def test_predict_fitted(dummy_model_handler: ModelHandler):
     x_val = np.random.randn(10, 3)
     dummy_model_handler.fit()
 
-    results = dummy_model_handler.predict(X_test=x_val, return_bounds=False)
+    results = dummy_model_handler.predict(X_test=x_val, return_std=False)
     assert len(results) == 2
     assert isinstance(results[0], np.ndarray)
     assert results[1] is None
 
-    results = dummy_model_handler.predict(X_test=x_val, return_bounds=True)
+    results = dummy_model_handler.predict(X_test=x_val, return_std=True)
 
     assert len(results) == 2
     assert isinstance(results[0], np.ndarray)
@@ -81,8 +86,7 @@ def test_calculate_shap_values_shap_file_not_exists(dummy_model_handler: ModelHa
     dummy_model_handler.shap_file_path = Path("not_exist_file_path")
     dummy_model_handler.fitting_mode = False
     with pytest.raises(FileNotFoundError):
-        dummy_model_handler.calculate_shap_values(
-            x_val, feature_names=["a", "b", "c"])
+        dummy_model_handler.calculate_shap_values(x_val)
 
 
 def test_calculate_shap_values_model_not_fitted(dummy_model_handler: ModelHandler):
@@ -92,8 +96,7 @@ def test_calculate_shap_values_model_not_fitted(dummy_model_handler: ModelHandle
     x_val = np.random.randn(10, 3)
     dummy_model_handler.fitting_mode = True
     with pytest.raises(NotFittedError):
-        dummy_model_handler.calculate_shap_values(
-            x_val, feature_names=["a", "b", "c"])
+        dummy_model_handler.calculate_shap_values(x_val)
 
 
 def test_calculate_shap_values_model_fitted(dummy_model_handler: ModelHandler):
@@ -103,8 +106,7 @@ def test_calculate_shap_values_model_fitted(dummy_model_handler: ModelHandler):
     x_val = np.random.randn(100, 3)
     dummy_model_handler.fitting_mode = True
     dummy_model_handler.fit()
-    shap_values_val = dummy_model_handler.calculate_shap_values(
-        x_val, feature_names=["a", "b", "c"])
+    shap_values_val = dummy_model_handler.calculate_shap_values(x_val)
     assert isinstance(shap_values_val, np.ndarray)
     assert shap_values_val.shape == (100, 3)
 
@@ -125,7 +127,8 @@ def test_save_and_load_estimator(dummy_model_handler: ModelHandler):
         X_train=dummy_model_handler.X_train,
         y_train=dummy_model_handler.y_train,
         fitting_mode=False,
-        file_path=dummy_model_handler.file_path
+        file_path=dummy_model_handler.file_path,
+        feature_names=dummy_model_handler.feature_names,
     )
     dummy_model_handler_loaded.fit()
 
@@ -144,8 +147,7 @@ def test_save_and_load_shap_explainer(dummy_model_handler: ModelHandler):
     dummy_model_handler.fitting_mode = True
     dummy_model_handler.shap_file_path = Path("test_shap_file")
     dummy_model_handler.fit()
-    dummy_model_handler.calculate_shap_values(
-        x_val, feature_names=["a", "b", "c"])
+    dummy_model_handler.calculate_shap_values(x_val)
 
     # Assert that the file was created
     assert dummy_model_handler.shap_file_path.exists()
@@ -155,10 +157,10 @@ def test_save_and_load_shap_explainer(dummy_model_handler: ModelHandler):
         X_train=dummy_model_handler.X_train,
         y_train=dummy_model_handler.y_train,
         fitting_mode=False,
-        shap_file_path=dummy_model_handler.shap_file_path
+        shap_file_path=dummy_model_handler.shap_file_path,
+        feature_names=dummy_model_handler.feature_names,
     )
-    dummy_model_handler_loaded.calculate_shap_values(
-        x_val, feature_names=["a", "b", "c"])
+    dummy_model_handler_loaded.calculate_shap_values(x_val)
 
     # Delete the file after the test
     os.remove(dummy_model_handler.shap_file_path)
