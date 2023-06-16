@@ -79,3 +79,23 @@ def test_resample_data_edge_and_failing_cases(numpy_array, frac_samples, seed):
         # Failing cases: Should raise error when frac_samples is out of range [0, 1]
         with pytest.raises(ValueError, match='frac_samples must be greater than 0 and less than or equal to 1.'):
             resample_data(x, y, frac_samples=frac_samples)
+
+
+@settings(deadline=None)
+@given(numpy_array=st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=20, max_size=100), frac_samples=st.floats(min_value=0.1, max_value=0.9))
+def test_resample_data_different_seeds(numpy_array, frac_samples):
+    x = y = np.array(numpy_array)
+
+    # Perform resampling with two different seeds
+    (res_x1, res_y1), (oob_x1, oob_y1) = resample_data(
+        x, y, frac_samples=frac_samples, seed=0)
+    (res_x2, res_y2), (oob_x2, oob_y2) = resample_data(
+        x, y, frac_samples=frac_samples, seed=1)
+
+    # Ensure the resampled indices are not identical for different seeds
+    unique_elements = len(set(numpy_array))
+    if unique_elements > 1:
+        assert not np.array_equal(res_x1, res_x2)
+        assert not np.array_equal(res_y1, res_y2)
+        assert not np.array_equal(oob_x1, oob_x2)
+        assert not np.array_equal(oob_y1, oob_y2)

@@ -78,6 +78,9 @@ def resample_data(*arrays: np.ndarray, frac_samples: float = 1, seed: int = 0, r
     # Check if all arrays have the same number of samples
     check_consistent_length(*arrays)
 
+    if seed is None:
+        seed = np.random.randint(0, 2**32 - 1)
+
     if not (0 < frac_samples <= 1):
         err_msg = 'frac_samples must be greater than 0 and less than or equal to 1.'
         logging.error(err_msg)
@@ -93,9 +96,6 @@ def resample_data(*arrays: np.ndarray, frac_samples: float = 1, seed: int = 0, r
     # Check for unique elements and set replace accordingly
     idx = np.arange(len(arrays[0]))
     unique_elements = len(set(arrays[0]))
-    print(f"input_array: {arrays[0]}")
-    print(f"idx: {idx}")
-    print(f"unique_elements: {unique_elements}")
 
     if unique_elements == 1:
         if frac_samples < 1:
