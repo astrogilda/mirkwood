@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from sklearn.exceptions import NotFittedError
 from utils.odds_and_ends import reshape_to_1d_array
-from utils.custom_transformers_and_estimators import ModelConfig, XTransformer, YTransformer, create_estimator, CustomTransformedTargetRegressor
+from utils.custom_transformers_and_estimators import ModelConfig, XTransformer, YTransformer, create_estimator, CustomTransformedTargetRegressor, PostProcessY
 import shap
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from joblib import dump, load
@@ -10,6 +10,7 @@ from typing import Any, Optional, Tuple, List
 from pathlib import Path
 import logging
 import warnings
+from src.data_handler import DataHandler, GalaxyProperty
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ class ModelHandler(BaseModel):
     X_train: np.ndarray
     y_train: np.ndarray
     feature_names: List[str]
+    galaxy_property: Optional[GalaxyProperty] = Field(
+        default=GalaxyProperty.STELLAR_MASS)
     X_val: Optional[np.ndarray] = None
     y_val: Optional[np.ndarray] = None
     weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
@@ -108,6 +111,9 @@ class ModelHandler(BaseModel):
         predicted_std = reshape_to_1d_array(
             self.estimator.predict_std(X)) if return_std else None
 
+        if self.galaxy_property is not None:
+            predicted_mean, predicted_std = self._convert_to_original_scale(
+                predicted_mean, predicted_std)
         # logging scales for debugging
         logger.info(
             f'Predicted mean scale: {np.mean(predicted_mean)}, standard deviation scale: {np.mean(predicted_std) if predicted_std is not None else None}')
@@ -123,6 +129,7 @@ class ModelHandler(BaseModel):
             X = X_test if X_test is not None else self.X_val
 
             if self.fitting_mode:
+                # print(type(X), X.shape)
                 shap_values, explainer = self._calculate_shap_values(X)
                 self._save_shap_model(explainer)
             else:
@@ -130,20 +137,21 @@ class ModelHandler(BaseModel):
 
             return shap_values
 
-    def _calculate_shap_values(self, X):
+    def _calculate_shap_values(self, X: np.ndarray) -> Tuple[np.ndarray, shap.TreeExplainer]:
         base_model = self.estimator.regressor_.named_steps['regressor']
-        data = self._get_shap_data()
+        data = ModelHandler._get_shap_data(X)
         explainer_mean = shap.TreeExplainer(
             base_model, data=data, model_output=0, feature_names=self.feature_names)
         shap_values_mean = explainer_mean.shap_values(
             X, check_additivity=False)
         return shap_values_mean, explainer_mean
 
-    def _get_shap_data(self):
-        if self.X_train.shape[0] > 200:
-            data = shap.kmeans(self.X_train, 100)
+    @staticmethod
+    def _get_shap_data(X: np.ndarray) -> np.ndarray:
+        if X.shape[0] > 200:
+            data = shap.kmeans(X, 100).data
         else:
-            data = self.X_train
+            data = X
         return data
 
     def _save_shap_model(self, explainer):
@@ -158,3 +166,17 @@ class ModelHandler(BaseModel):
         shap_values_mean = explainer_mean.shap_values(
             X, check_additivity=False)
         return shap_values_mean, explainer_mean
+
+    def _convert_to_original_scale(self, predicted_mean: np.ndarray, predicted_std: Optional[np.ndarray]) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        post_processor = PostProcessY(prop=self.galaxy_property)
+        if predicted_std is None:
+            original_scale_mean = post_processor.transform(predicted_mean)
+            original_scale_std = None
+        else:
+            predicted_upper = predicted_mean + predicted_std
+            predicted_lower = predicted_mean - predicted_std
+            original_scale_mean, original_scale_upper, original_scale_lower = post_processor.transform(
+                (predicted_mean, predicted_upper, predicted_lower))
+            original_scale_std = (original_scale_upper -
+                                  original_scale_lower)/2
+        return original_scale_mean, original_scale_std

@@ -106,11 +106,23 @@ X_train = np.random.rand(50, 3).astype(np.float64)
 y_train = np.random.rand(50).astype(np.float64)
 X_val = np.random.rand(30, 3).astype(np.float64)
 y_val = np.random.rand(30).astype(np.float64)
+
 feature_names = []
-for _ in range(3):
+for _ in range(X_train.shape[1]):
     random_string = ''.join(random.choices(
         string.ascii_letters + string.digits, k=10))
     feature_names.append(random_string)
+
+from src.data_handler import DataHandler, DataHandlerConfig, TrainData
+from sklearn.model_selection import train_test_split
+
+data_handler = DataHandler(DataHandlerConfig())
+X, y = data_handler.get_data(TrainData.SIMBA)
+y = y['log_stellar_mass']
+feature_names = X.columns.tolist()
+X = np.log10(X.values+1)
+X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
 
 
 # create_estimator for tests
@@ -118,71 +130,31 @@ ce = create_estimator(None, None, None)
 ce.fit(X=X_train, y=y_train, X_val=X_val, y_val=y_val, sanity_check=True)
 y_val_pred_mean_ce, y_val_pred_std_ce = ce.predict(
     X_val), ce.predict_std(X_val)
+y_train_pred_mean_ce, y_train_pred_std_ce = ce.predict(
+    X_train), ce.predict_std(X_train)
 
 # ngboost model for tests
 cngb = CustomNGBRegressor(config=ModelConfig())
 cngb.fit(X_train, y_train, X_val=X_val, Y_val=y_val)
-y_val_pred_mean_cngb, y_train_pred_mean_cngb = cngb.predict(
-    X_val), cngb.predict_std(X_train)
-y_val_pred_std_cngb, y_train_pred_std_cngb = cngb.predict_std(
-    X_val), cngb.predict_std(X_train)
-
-
-# create_estimator for tests
-ttr = create_estimator(None, None, None)
-ttr.transformer.fit(X=y_train)
-y_train_trans = ttr.transformer.transform(X=y_train)
-y_val_trans = ttr.transformer.transform(
-    X=y_val) if y_val is not None else None
-preprocessor = ttr.regressor.named_steps['preprocessor']
-X_train_trans = ttr.preprocess_data(preprocessor, X_train)
-X_val_trans = ttr.preprocess_data(
-    preprocessor, X_val) if X_val is not None else None
-
-y_train_inv_trans = ttr.inverse_transform_data(
-    ttr.transformer, y_train_trans).ravel()
-y_val_inv_trans = ttr.inverse_transform_data(
-    ttr.transformer, y_val_trans).ravel()
-
-regressor = ttr.regressor.named_steps['regressor']
-regressor.fit(X=X_train_trans, y=y_train_trans,
-              X_val=X_val_trans, y_val=y_val_trans)
-
-y_train_pred = regressor.predict(X_train_trans)
-y_train_pred_inv_trans = ttr.transformer.inverse_transform(
-    y_train_pred).ravel()
-y_train_pred_std = regressor.predict_std(X_train_trans)
-y_train_pred_upper = y_train_pred + y_train_pred_std
-y_train_pred_lower = y_train_pred - y_train_pred_std
-y_train_pred_upper_inv_trans = ttr.transformer.inverse_transform(
-    y_train_pred_upper).ravel()
-y_train_pred_lower_inv_trans = ttr.transformer.inverse_transform(
-    y_train_pred_lower).ravel()
-y_train_pred_std_inv_trans = (
-    y_train_pred_upper_inv_trans-y_train_pred_lower_inv_trans)/2
-
-
-y_val_pred = regressor.predict(X_val_trans)
-y_val_pred_inv_trans = ttr.transformer.inverse_transform(y_val_pred).ravel()
-y_val_pred_std = regressor.predict_std(X_val_trans)
-y_val_pred_upper = y_val_pred + y_val_pred_std
-y_val_pred_lower = y_val_pred - y_val_pred_std
-y_val_pred_upper_inv_trans = ttr.transformer.inverse_transform(
-    y_val_pred_upper).ravel()
-y_val_pred_lower_inv_trans = ttr.transformer.inverse_transform(
-    y_val_pred_lower).ravel()
-y_val_pred_std_inv_trans = (
-    y_val_pred_upper_inv_trans-y_val_pred_lower_inv_trans)/2
+y_val_pred_mean_cngb, y_val_pred_std_cngb = cngb.predict(
+    X_val), cngb.predict_std(X_val)
+y_train_pred_mean_cngb, y_train_pred_std_cngb = cngb.predict(
+    X_train), cngb.predict_std(X_train)
 
 
 # modelhandler for tests
 model_handler = ModelHandler(
-    X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, feature_names=feature_names)
+    X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, feature_names=feature_names, estimator=ce)
 model_handler.fit()
-results = model_handler.predict(X_test=X_val, return_std=True)
+y_val_pred_mean_mh, y_val_pred_std_mh = model_handler.predict(X_test=X_val, return_std=True)
+
+np.allclose(y_val_pred_mean_mh, y_val_pred_mean_ce)
+np.allclose(y_val_pred_std_mh, y_val_pred_std_ce)
 
 # BootstrapHandler for tests
-bootstrap_handler = BootstrapHandler(model_handler=model_handler)
+bootstrap_handler = BootstrapHandler(model_handler=model_handler, galaxy_property=None)
+
+#TODO: move galaxy_property to model_handler
 
 n_jobs_bs = 10
 num_bs_inner = 5
@@ -192,6 +164,29 @@ with Pool(num_bs_inner) as p:
     concat_output = p.starmap(
         BootstrapHandler.bootstrap_func_mp, args)
 
+        
+# first three elements are of shape (n, 1) and the fourth element is of shape (n, m)
+
+# Split var into four lists, each containing all the versions of a specific element
+list1, list2, list3, list4 = zip(*concat_output)
+
+# Convert the lists to arrays and stack along a new dimension
+array1 = np.stack(list1, axis=0)  # shape is (num_bs_inner, n, 1)
+array2 = np.stack(list2, axis=0)  # shape is (num_bs_inner, n, 1)
+array3 = np.stack(list3, axis=0)  # shape is (num_bs_inner, n, 1)
+array4 = np.stack(list4, axis=0)  # shape is (num_bs_inner, n, m)
+
+# Now calculate the mean across the k versions for each array
+mean_array1 = np.mean(array1, axis=0)  # shape will be (n, 1)
+mean_array2 = np.mean(array2, axis=0)  # shape will be (n, 1)
+mean_array3 = np.mean(array3, axis=0)  # shape will be (n, 1)
+mean_array4 = np.mean(array4, axis=0)  # shape will be (n, m)
+
+
+
 orig_array, mu_array, std_array, shap_mu_array = np.array(
     concat_output).T
+
+
+
 '''

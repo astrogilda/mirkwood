@@ -1,8 +1,9 @@
 
+from src.data_handler import GalaxyProperty
 from utils.weightify import Weightify
 from sklearn.pipeline import Pipeline
 from utils.odds_and_ends import reshape_to_1d_array, reshape_to_2d_array
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, List, Optional, Union, Tuple, Dict, Callable
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from pydantic import BaseModel, Field, validator, root_validator, conint, confloat
@@ -469,3 +470,56 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
         regressor=feature_pipeline,
         transformer=pipeline_y
     )
+
+
+class PostProcessY(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer to postprocess data according to the specified galaxy property.
+
+    Parameters
+    ----------
+    prop : GalaxyProperty
+        The galaxy property to apply the inverse transform.
+    """
+
+    def __init__(self, prop: GalaxyProperty):
+        self.prop = prop
+        self.inverse_transforms = self._get_label_rev_func()
+
+    def fit(self, X: np.ndarray, y=None) -> 'PostProcessY':
+        """Fit the transformer. Not used in this transformer, hence returning self."""
+        return self
+
+    @staticmethod
+    def _get_label_rev_func() -> Dict[str, Callable[[np.ndarray], np.ndarray]]:
+        """Get inverse transforms for galaxy properties."""
+        return {GalaxyProperty.STELLAR_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
+                GalaxyProperty.DUST_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                GalaxyProperty.METALLICITY: lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
+                }
+
+    def transform(self, *ys: Union[np.ndarray, Tuple[np.ndarray]]) -> Union[np.ndarray, Tuple[np.ndarray]]:
+        """
+        Apply inverse transformation to the data according to the specified galaxy property.
+
+        Parameters
+        ----------
+        *ys : Union[np.ndarray, Tuple[np.ndarray]]
+            Preprocessed data.
+
+        Returns
+        -------
+        Union[np.ndarray, Tuple[np.ndarray]]
+            Postprocessed data.
+        """
+        postprocessed_ys = [self._apply_inverse_transform(y) for y in ys]
+        return tuple(postprocessed_ys) if len(postprocessed_ys) > 1 else postprocessed_ys[0]
+
+    def _apply_inverse_transform(self, y: np.ndarray) -> np.ndarray:
+        """Apply the inverse transformation for the specific galaxy property."""
+        postprocessed_y = np.zeros_like(y)
+        for key, func in self.inverse_transforms.items():
+            if self.prop.value in key:
+                postprocessed_y = func(y)
+        return postprocessed_y

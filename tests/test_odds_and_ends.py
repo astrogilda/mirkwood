@@ -1,69 +1,81 @@
-import numpy as np
-from typing import List
-from hypothesis import given, strategies as st, settings
 import pytest
-
+from hypothesis import given, strategies as st, settings
+import numpy as np
 from utils.odds_and_ends import *
 
 
-@given(st.lists(st.floats(allow_nan=False), min_size=1, max_size=10))
-def test_reshape_to_1d_array(array: List[float]):
-    np_array = np.array(array)
-    reshaped = reshape_to_1d_array(np_array)
+@settings(deadline=None)
+@given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=1, max_size=10))
+def test_reshape_to_1d_array(numpy_array):
+    numpy_array = np.array(numpy_array)
+    reshaped = reshape_to_1d_array(numpy_array)
     assert reshaped.ndim == 1
-    assert np.array_equal(reshaped, np_array.ravel())
+    assert np.array_equal(reshaped, numpy_array.ravel())
 
 
-@given(st.lists(st.floats(allow_nan=False), min_size=1, max_size=10))
-def test_reshape_to_2d_array(array: List[List[float]]):
-    np_array = np.array(array)
-    reshaped = reshape_to_2d_array(np_array)
+@settings(deadline=None)
+@given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=1, max_size=10))
+def test_reshape_to_2d_array(numpy_array):
+    numpy_array = np.array(numpy_array)
+    reshaped = reshape_to_2d_array(numpy_array)
     assert reshaped.ndim == 2
     assert reshaped.shape[1] == 1
-    assert np.array_equal(reshaped, np_array.reshape(-1, 1))
+    assert np.array_equal(reshaped, numpy_array.reshape(-1, 1))
 
 
-@given(
-    st.lists(st.integers(min_value=0, max_value=1000),
-             min_size=2, max_size=10),
-    st.integers(min_value=1, max_value=10),
-)
 @settings(deadline=None)
-def test_numba_resample(idx: List[int], n_samples: int):
-    np_idx = np.array(idx)
-    resampled = numba_resample(np_idx, n_samples)
-    assert resampled.shape[0] == n_samples
-    assert set(resampled).issubset(set(np_idx))
+@given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=2, max_size=10))
+def test_resample_data(numpy_array):
+    x = y = np.array(numpy_array)
+    unique_elements = len(set(numpy_array))
+
+    # Failing case: Should raise error when x and y are not of the same length
+    with pytest.raises(ValueError):
+        resample_data(x[:-1], y)
+
+    # Normal case: Check if resampling works correctly
+    (res_x, res_y), (oob_x, oob_y) = resample_data(x, y)
+    assert res_x.shape[0] == res_y.shape[0] == len(x)
+
+    resampled_unique_elements = len(set(res_x))
+    oob_unique_elements = len(set(oob_x))
+
+    assert res_x.shape[0] == res_y.shape[0] == len(x)
+    if unique_elements == 1:
+        assert len(oob_x) == len(oob_y) == 0
+
+    assert resampled_unique_elements + oob_unique_elements >= unique_elements
+
+    assert set(np.unique(res_y)).issubset(set(np.unique(y)))
+    assert set(np.unique(oob_y)).issubset(set(np.unique(y)))
 
 
-def generate_numpy_arrays(min_rows: int, max_rows: int, min_cols: int, max_cols: int):
-    return st.tuples(
-        st.integers(min_value=min_rows, max_value=max_rows),
-        st.integers(min_value=min_cols, max_value=max_cols),
-    ).flatmap(
-        lambda shape: st.lists(
-            st.lists(
-                st.floats(allow_nan=False, allow_infinity=False),
-                min_size=shape[1],
-                max_size=shape[1],
-            ),
-            min_size=shape[0],
-            max_size=shape[0],
-        )
-    ).map(np.array)
-
-
-@given(
-    generate_numpy_arrays(1, 10, 2, 5),
-    generate_numpy_arrays(1, 10, 1, 1),
-    st.floats(min_value=0.1, max_value=1.0),
+frac_samples_strategy = st.one_of(
+    st.just(1.0),
+    st.floats(min_value=-1.0, max_value=0.0).map(lambda x: round(x, 2)),
+    st.floats(min_value=1.1, max_value=2.0).map(lambda x: round(x, 2))
 )
+
+
 @settings(deadline=None)
-def test_resample_data(x: np.ndarray, y: np.ndarray, frac_samples: float):
-    if len(x) != len(y):
-        with pytest.raises(ValueError):
-            resample_data(x, y, frac_samples=frac_samples)
+@given(numpy_array=st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=2, max_size=10), frac_samples=frac_samples_strategy, seed=st.integers(0, 2**32 - 1))
+def test_resample_data_edge_and_failing_cases(numpy_array, frac_samples, seed):
+    x = y = np.array(numpy_array)
+
+    if frac_samples == 1.0:
+        # Edge case: Resampling with frac_samples=1 should yield all original data and no out-of-bag data
+        (res_x, res_y), (oob_x, oob_y) = resample_data(
+            x, y, frac_samples=frac_samples, seed=seed)
+        assert isinstance(res_x, np.ndarray)
+        assert isinstance(res_y, np.ndarray)
+        assert isinstance(oob_x, np.ndarray)
+        assert isinstance(oob_y, np.ndarray)
+        assert res_x.shape[0] == res_y.shape[0] == len(x)
+        unique_elements_x, unique_elements_y = len(set(x)), len(set(y))
+        if unique_elements_x == unique_elements_y == 1:
+            assert len(oob_x) == len(oob_y) == 0
+
     else:
-        res_x, res_y = resample_data(x, y, frac_samples=frac_samples)
-        assert res_x.shape[0] == res_y.shape[0] == int(frac_samples * len(x))
-        assert set(np.unique(res_y)).issubset(set(np.unique(y)))
+        # Failing cases: Should raise error when frac_samples is out of range [0, 1]
+        with pytest.raises(ValueError, match='frac_samples must be greater than 0 and less than or equal to 1.'):
+            resample_data(x, y, frac_samples=frac_samples)

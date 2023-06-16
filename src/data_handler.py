@@ -148,6 +148,7 @@ class DataHandler:
         self.config = config
         np.random.seed(self.config.np_seed)
 
+    '''
     @property
     def inverse_transforms(self) -> Dict[str, Callable[[np.ndarray], np.ndarray]]:
         return {
@@ -156,6 +157,16 @@ class DataHandler:
             'log_metallicity': self.label_rev_func()[GalaxyProperty.METALLICITY],
             'log_sfr': self.label_rev_func()[GalaxyProperty.SFR],
         }
+
+
+    @staticmethod
+    def label_rev_func():
+        return {GalaxyProperty.STELLAR_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
+                GalaxyProperty.DUST_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
+                GalaxyProperty.METALLICITY: lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
+                GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
+                }
+    '''
 
     def get_data(self, train_data: Union[List[TrainData], TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
         """
@@ -229,41 +240,3 @@ class DataHandler:
         y_array['log_sfr'] = log_sfr
 
         return y_array
-
-    @staticmethod
-    def label_rev_func():
-        return {GalaxyProperty.STELLAR_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
-                GalaxyProperty.DUST_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
-                GalaxyProperty.METALLICITY: lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
-                GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
-                }
-
-    def postprocess_y(self, *ys: Union[np.ndarray, Tuple[np.ndarray]], prop: GalaxyProperty) -> Union[np.ndarray, Tuple[np.ndarray]]:
-        """
-        Postprocess the y vector(s) by applying the inverse transforms.
-
-        Parameters
-        ----------
-        *ys : Union[np.ndarray, Tuple[np.ndarray]]
-            Preprocessed y vector(s).
-        prop: GalaxyProperty
-            The galaxy property to apply the inverse transform.
-
-        Returns
-        -------
-        Union[np.ndarray, Tuple[np.ndarray]]
-            Postprocessed y vector(s).
-        """
-        postprocessed_ys = []
-
-        for y in ys:
-            # Create a numpy array of zeros with the same shape as y
-            postprocessed_y = np.zeros_like(y)
-            for key, func in self.inverse_transforms.items():
-                # only apply the inverse transform for the given prop
-                if prop.value in key.replace("log_", ""):
-                    postprocessed_y = func(y)
-            postprocessed_ys.append(postprocessed_y)
-
-        # Return tuple if more than one array, else return the single array
-        return tuple(postprocessed_ys) if len(postprocessed_ys) > 1 else postprocessed_ys[0]

@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import numpy as np
 from src.model_handler import ModelHandler
 from src.data_handler import DataHandler, GalaxyProperty
-from utils.odds_and_ends import resample_data
+from utils.odds_and_ends import resample_data, reshape_to_2d_array
 
 
 class BootstrapHandler(BaseModel):
@@ -19,8 +19,6 @@ class BootstrapHandler(BaseModel):
     """
     model_handler: ModelHandler
     frac_samples_best: float = Field(default=0.8, gt=0, le=1)
-    galaxy_property: GalaxyProperty = Field(
-        default=GalaxyProperty.STELLAR_MASS)
     z_score: confloat(gt=0, le=5) = Field(
         default=1.96,
         description="The z-score for the confidence interval. Defaults to 1.96, which corresponds to a 95 per cent confidence interval."
@@ -60,15 +58,8 @@ class BootstrapHandler(BaseModel):
             X_test=self.model_handler.X_val)
         y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
             y_pred_std, y_pred_mean + self.z_score * y_pred_std
-        # Postprocess prediction values
-        y_val, y_pred_upper, y_pred_lower, y_pred_mean = DataHandler().postprocess_y(
-            (self.model_handler.y_val, y_pred_upper, y_pred_lower, y_pred_mean), prop=self.galaxy_property)
 
         # Create mask for invalid values
         mask = np.ma.masked_invalid
 
-        # Re-calculate std after postprocessing
-        y_pred_std = (mask(y_pred_upper) -
-                      mask(y_pred_lower))/2
-
-        return mask(y_val), mask(y_pred_mean), mask(y_pred_std), mask(shap_values_mean)
+        return reshape_to_2d_array(mask(y_val)) if self.galaxy_property is not None else reshape_to_2d_array(self.model_handler.y_val), reshape_to_2d_array(mask(y_pred_mean)), reshape_to_2d_array(mask(y_pred_std)), reshape_to_2d_array(mask(shap_values_mean))

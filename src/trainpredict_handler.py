@@ -199,7 +199,8 @@ class TrainPredictHandler(BaseModel):
                 concat_output = p.starmap(
                     BootstrapHandler.bootstrap_func_mp, args)
 
-            yval_outputs = self.process_concat_output(z_score, concat_output)
+            yval_outputs = TrainPredictHandler.process_concat_output(
+                concat_output)
 
             y_val = DataHandler.postprocess_y(y_val, prop=self.galaxy_property)
 
@@ -211,27 +212,30 @@ class TrainPredictHandler(BaseModel):
         return tuple(yval_lists)
 
     @staticmethod
-    def process_concat_output(z_score: float, concat_output: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def process_concat_output(concat_output: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Process the output from the bootstrap handler.
         Returns tuples of prediction mean, std, lower, upper, epis std, and mean shap.
         """
-        orig_array, mu_array, std_array, shap_mu_array = np.array(
-            concat_output).T
 
-        # avoid infs. from std_array. repeat for mu_array just in case.
-        orig_array = np.ma.masked_invalid(orig_array)
-        mu_array = np.ma.masked_invalid(mu_array)
-        std_array = np.ma.masked_invalid(std_array)
-        shap_mu_array = np.ma.masked_invalid(shap_mu_array)
+        # first three elements are of shape (n, 1) and the fourth element is of shape (n, m)
+
+        # Split var into four lists, each containing all the versions of a specific element
+        list1, list2, list3, list4 = zip(*concat_output)
+
+        # Convert the lists to arrays and stack along a new dimension
+        orig_array = np.stack(list1, axis=0)
+        # shape is (num_bs_inner, n, 1)
+        mu_array = np.stack(list2, axis=0)
+        # shape is (num_bs_inner, n, 1)
+        std_array = np.stack(list3, axis=0)
+        # shape is (num_bs_inner, n, 1)
+        shap_mu_array = np.stack(list4, axis=0)
+        # shape is (num_bs_inner, n, m)
 
         yval_pred_mean = np.ma.mean(mu_array, axis=0)
-        # Squaring and sqrt operation removed
         yval_pred_std = np.ma.sqrt(np.ma.mean(std_array**2, axis=0))
         yval_pred_std_epis = np.ma.std(mu_array, axis=0)
-
-        yval_pred_lower = yval_pred_mean - z_score * yval_pred_std
-        yval_pred_upper = yval_pred_mean + z_score * yval_pred_std
         yval_shap_mean = np.ma.mean(shap_mu_array, axis=0)
 
-        return yval_pred_mean, yval_pred_std, yval_pred_lower, yval_pred_upper, yval_pred_std_epis, yval_shap_mean
+        return orig_array[0], yval_pred_mean, yval_pred_std, yval_pred_std_epis, yval_shap_mean
