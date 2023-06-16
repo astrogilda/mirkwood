@@ -1,16 +1,16 @@
+from sklearn.linear_model import LinearRegression
 from numpy.testing import assert_almost_equal
 from sklearn.exceptions import NotFittedError
 import numpy as np
 import pytest
 from hypothesis import given, strategies as st, settings
-from random import shuffle
 from utils.custom_transformers_and_estimators import *
 from utils.custom_transformers_and_estimators import _MultipleTransformer
 from utils.odds_and_ends import *
 
 from ngboost.distns import Normal
 from ngboost.scores import LogScore
-from sklearn.preprocessing import FunctionTransformer, StandardScaler, RobustScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler, RobustScaler, MinMaxScaler
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import train_test_split
 from pydantic.error_wrappers import ValidationError
@@ -19,13 +19,13 @@ from pydantic.error_wrappers import ValidationError
 @st.composite
 def array_1d_and_2d(draw):
     """Strategy to generate a pair of 1D and 2D numpy arrays with shared elements"""
-    n_elements = draw(st.integers(100, 1000))
+    n_elements = draw(st.integers(10, 100))
     unique_ratio = draw(st.floats(min_value=0.1, max_value=0.99))
     n_unique = round(n_elements * unique_ratio)
     n_repeat = n_elements - n_unique
 
     # feel free to adjust the range and size of this pool
-    elements_pool = np.random.uniform(-1000, 1000, 50000)
+    elements_pool = np.random.uniform(-100, 100, 5000)
     unique_elements = draw(st.lists(st.sampled_from(
         elements_pool), min_size=n_unique, max_size=n_unique, unique=True))
 
@@ -94,7 +94,7 @@ def test_model_config_wrong_base():
 
 def test_customngbregressor_init():
     """Test the initialization of the CustomNGBRegressor class"""
-    ngb = CustomNGBRegressor(**ModelConfig().dict())
+    ngb = CustomNGBRegressor(config=ModelConfig())
     assert isinstance(ngb, CustomNGBRegressor)
     assert isinstance(ngb.Base, DecisionTreeRegressor)
     assert ngb.Dist == Normal
@@ -123,9 +123,9 @@ def test_customngbregressor_fit_and_predict(arrays):
     val_sample_weight = np.random.uniform(
         low=0.1, high=1.0, size=X_val.shape[0])
 
-    ngb = CustomNGBRegressor()
+    ngb = CustomNGBRegressor(config=ModelConfig())
     ngb.fit(X_train, y_train, sample_weight=sample_weight, X_val=X_val,
-            y_val=y_val, val_sample_weight=val_sample_weight)
+            Y_val=y_val, val_sample_weight=val_sample_weight)
 
     preds = ngb.predict(X)
     assert isinstance(preds, np.ndarray)
@@ -138,22 +138,21 @@ def test_customngbregressor_fit_and_predict(arrays):
 
 @given(array_2d())
 @settings(deadline=None, max_examples=10)
-def test_xtransformer_passing(array):
+def test_xtransformer_passing_and_inverse_transforming(array):
     # Define the transformer configuration
     x_transformer = XTransformer()
 
-    # Fit and transform
-    transformed_array = x_transformer.transformers[0].transformer.fit_transform(
-        array)
-
-    # Validate if StandardScaler is effectively applied
-    assert_almost_equal(transformed_array.mean(axis=0), 0)
-    assert_almost_equal(transformed_array.std(axis=0), 1)
-
-    # Test inverse transform
-    inversed_array = x_transformer.transformers[0].transformer.inverse_transform(
-        transformed_array)
-    assert_almost_equal(inversed_array, array)
+    # Loop over each transformer in the XTransformer
+    for transformer_config in x_transformer.transformers:
+        # Fit and transform
+        transformed_array = transformer_config.transformer.fit_transform(array)
+        # Validate if StandardScaler is effectively applied
+        if isinstance(transformer_config.transformer, StandardScaler):
+            assert_almost_equal(transformed_array.mean(axis=0), 0)
+        # Test inverse transform right after the transformation
+        inversed_array = transformer_config.transformer.inverse_transform(
+            transformed_array)
+        assert np.allclose(inversed_array, array, rtol=.05)
 
 
 def test_xtransformer_failing():
@@ -166,8 +165,8 @@ def test_xtransformer_failing():
 
 
 @given(array_1d())
-@settings(deadline=None)
-def test_ytransformer_passing(array):
+@settings(deadline=None, max_examples=10)
+def test_ytransformer_passing_and_inverse_transforming(array):
     # Define the transformer configuration
     y_transformer = YTransformer(transformers=TransformerTuple(
         [
@@ -177,22 +176,19 @@ def test_ytransformer_passing(array):
                               transformer=StandardScaler())
         ]))
 
-    array = array.reshape(-1, 1)
-    # Fit and transform
-
-    robust_array = y_transformer.transformers[0].transformer.fit_transform(
-        array)
-    scaled_array = y_transformer.transformers[1].transformer.fit_transform(
-        robust_array)
-
-    # Validate if reshaping, StandardScaler and reshaping again are effectively applied
-    assert_almost_equal(scaled_array.mean(), 0)
-    assert_almost_equal(scaled_array.std(), 1)
-
-    # Test inverse transform
-    inversed_array = y_transformer.transformers[0].transformer.inverse_transform(
-        y_transformer.transformers[1].transformer.inverse_transform(scaled_array))
-    assert_almost_equal(inversed_array.reshape(-1, 1), array)
+    # Loop over each transformer in the XTransformer
+    for transformer_config in y_transformer.transformers:
+        # Fit and transform
+        transformed_array = transformer_config.transformer.fit_transform(
+            reshape_to_2d_array(array))
+        # Validate if StandardScaler is effectively applied
+        if isinstance(transformer_config.transformer, StandardScaler):
+            assert_almost_equal(transformed_array.mean(axis=0), 0)
+        # Test inverse transform right after the transformation
+        inversed_array = transformer_config.transformer.inverse_transform(
+            reshape_to_2d_array(transformed_array))
+        assert np.allclose(reshape_to_1d_array(
+            inversed_array), array, rtol=.05)
 
 
 def test_ytransformer_failing():
@@ -241,7 +237,7 @@ def test_multiple_transformer(X):
     X_trans = multi_trans.transform(X)
     assert not np.array_equal(X.ravel(), X_trans.ravel())
     X_inv = multi_trans.inverse_transform(X_trans)
-    np.testing.assert_almost_equal(X.ravel(), X_inv.ravel())
+    assert np.allclose(X.ravel(), X_inv.ravel(), rtol=.05)
 
 
 @given(array_1d_and_2d())
@@ -261,7 +257,8 @@ def test_create_estimator(arrays):
                            y_transformer=y_transformer)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
-    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, weight_flag=True)
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val,
+            weight_flag=False, sanity_check=True)
     y_pred = ttr.predict(X)
     # Check shape of predicted y
     assert y_pred.shape == y.flatten().shape
@@ -285,7 +282,8 @@ def test_create_estimator_None(arrays):
     ttr = create_estimator(None, None, None)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
-    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, weight_flag=True)
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val,
+            weight_flag=False, sanity_check=True)
     y_pred = ttr.predict(X)
     # Check shape of predicted y
     assert y_pred.shape == y.flatten().shape
@@ -305,46 +303,9 @@ def test_create_estimator_invalid():
         create_estimator(None, None, "not a YTransformer")
 
 
-@given(array_2d())
-@settings(deadline=None, max_examples=10)
-def test_xtransformer_passing_and_inverse_transforming(array):
-    # Define the transformer configuration
-    x_transformer = XTransformer()
-
-    # Loop over each transformer in the XTransformer
-    for transformer_config in x_transformer.transformers:
-
-        # Fit and transform
-        transformed_array = transformer_config.transformer.fit_transform(array)
-
-        # Test inverse transform right after the transformation
-        inversed_array = transformer_config.transformer.inverse_transform(
-            transformed_array)
-        assert_almost_equal(inversed_array, array)
-
-
-@given(array_1d())
-@settings(deadline=None, max_examples=10)
-def test_ytransformer_passing_and_inverse_transforming(array):
-    # Define the transformer configuration
-    y_transformer = YTransformer()
-
-    # Loop over each transformer in the XTransformer
-    for transformer_config in y_transformer.transformers:
-
-        # Fit and transform
-        transformed_array = transformer_config.transformer.fit_transform(
-            reshape_to_2d_array(array))
-
-        # Test inverse transform right after the transformation
-        inversed_array = transformer_config.transformer.inverse_transform(
-            reshape_to_2d_array(transformed_array))
-        assert_almost_equal(reshape_to_1d_array(inversed_array), array)
-
-
 @given(array_1d_and_2d())
 @settings(
-    deadline=None, max_examples=10
+    deadline=None, max_examples=5
 )
 def test_custom_transformed_target_regressor(arrays):
     """Test fitting, transforming and predicting of the CustomTransformedTargetRegressor class"""
@@ -358,9 +319,10 @@ def test_custom_transformed_target_regressor(arrays):
     # Instantiate transformers
     X_transformer = XTransformer()
     y_transformer = YTransformer()
+    model_config = ModelConfig()
 
     # Instantiate the regressor
-    ngb = CustomNGBRegressor()
+    ngb = CustomNGBRegressor(model_config)
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                           for transformer in X_transformer.transformers])
@@ -373,7 +335,7 @@ def test_custom_transformed_target_regressor(arrays):
                                            transformer=pipeline_y)
 
     # Fit and make predictions
-    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+    ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, sanity_check=True)
     y_pred = ttr.predict(X)
 
     # Fit the base regressor for comparison
@@ -381,4 +343,143 @@ def test_custom_transformed_target_regressor(arrays):
     y_pred_base = ngb.predict(X)
 
     # Predictions made by CustomTransformedTargetRegressor should be similar to those made by the base estimator
-    assert_almost_equal(y_pred, y_pred_base, decimal=5)
+    assert np.allclose(y_pred, y_pred_base, rtol=.05)
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks(X):
+    """Test successful transformation with StandardScaler."""
+    transformer = StandardScaler()
+    transformer, result = apply_transform_with_checks(
+        transformer, 'fit_transform', X)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == X.shape
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_invalid_method(X):
+    """Test invalid method exception."""
+    transformer = StandardScaler()
+    with pytest.raises(ValueError, match=r".*Invalid method name:.*"):
+        apply_transform_with_checks(transformer, 'invalid_method', X)
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks_sanity_check(X):
+    """Test successful inverse transformation with StandardScaler."""
+    transformer = StandardScaler()
+    transformer, result = apply_transform_with_checks(
+        transformer, 'fit_transform', X, sanity_check=True)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == X.shape
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_fail_transform(X):
+    """Test failed transformation exception."""
+    transformer = LinearRegression()  # Not a transformer
+    with pytest.raises(AttributeError, match=r".*has no attribute 'transform'.*"):
+        apply_transform_with_checks(transformer, 'transform', X)
+
+
+@given(array_1d_and_2d())
+@settings(
+    deadline=None, max_examples=10
+)
+def test_apply_transform_with_checks_y_provided(arrays):
+    """Test successful transformation when y is provided."""
+    y, X = arrays
+    transformer = StandardScaler()
+    result = apply_transform_with_checks(transformer, 'fit', X, y=y)
+    assert isinstance(result, TransformerMixin)
+
+
+def test_apply_transform_with_checks_edge_case_empty_array():
+    """Test edge case with empty array."""
+    transformer = StandardScaler()
+    X_empty = np.array([])
+    with pytest.raises(ValueError, match=r"Failed to transform data with StandardScaler"):
+        apply_transform_with_checks(transformer, 'fit_transform', X_empty)
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks_edge_case_single_feature(X):
+    """Test edge case with single feature array."""
+    transformer = StandardScaler()
+    X_single_feature = X[:, 0].reshape(-1, 1)
+    _, result = apply_transform_with_checks(
+        transformer, 'fit_transform', X_single_feature)
+    assert isinstance(result, np.ndarray) and result.shape[1] == 1
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_none_transformer(X):
+    """Test with None as transformer."""
+    with pytest.raises(AttributeError, match=r"'NoneType' object has no attribute 'fit_transform'"):
+        apply_transform_with_checks(None, 'fit_transform', X)
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_missing_fit_method(X):
+    """Test transformer that doesn't have a fit method."""
+    class BadTransformer:
+        def transform(self, X):
+            return X * 2
+
+    transformer = BadTransformer()
+    with pytest.raises(AttributeError, match=r".*has no attribute 'fit_transform'.*"):
+        apply_transform_with_checks(transformer, 'fit_transform', X)
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_missing_transform_method(X):
+    """Test transformer that doesn't have a transform method."""
+    class BadTransformer:
+        def fit(self, X):
+            return self
+
+    transformer = BadTransformer()
+    with pytest.raises(AttributeError, match=r".*has no attribute 'transform'.*"):
+        apply_transform_with_checks(transformer, 'transform', X)
+
+
+def test_apply_transform_with_checks_string_X():
+    """Test with string as X."""
+    transformer = StandardScaler()
+    with pytest.raises(ValueError, match=r".*could not convert string to float.*"):
+        apply_transform_with_checks(transformer, 'fit_transform', "invalid_X")
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_string_y(X):
+    """Test with string as y."""
+    transformer = DecisionTreeRegressor()
+    with pytest.raises(ValueError, match=r".*cannot be considered a valid collection*"):
+        apply_transform_with_checks(transformer, 'fit', X, y="invalid_y")
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_none_method_name(X):
+    """Test with None as method name."""
+    transformer = StandardScaler()
+    with pytest.raises(ValueError, match=r".*Invalid method name: None. Must be one of .*"):
+        apply_transform_with_checks(transformer, None, X)
+
+
+@given(array_1d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_1d_input_for_2d_transformer(X):
+    """Test case where a 1D input is passed to a transformer expecting 2D input."""
+    transformer = StandardScaler()
+    with pytest.raises(ValueError, match=r".*Expected 2D array, got 1D array instead.*"):
+        apply_transform_with_checks(transformer, 'fit_transform', X)

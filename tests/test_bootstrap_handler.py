@@ -1,3 +1,4 @@
+from utils.custom_transformers_and_estimators import CustomNGBRegressor, create_estimator
 from multiprocessing import Pool
 import pytest
 import numpy as np
@@ -7,7 +8,7 @@ from pydantic import ValidationError
 from src.data_handler import GalaxyProperty
 import random
 import string
-from numpy.testing import assert_almost_equal, assert_array_equal
+from numpy.testing import assert_array_equal
 from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics, calculate_z_score
 
 # Test Data
@@ -98,10 +99,99 @@ def test_bootstrap_func_mp_metrics():
         probabilistic_error_metrics_handler.interval_sharpness(), float)
 
 
-n_jobs_bs = 10
+'''
 
-with Pool(n_jobs_bs) as p:
+# Test Data
+X_train = np.random.rand(50, 3).astype(np.float64)
+y_train = np.random.rand(50).astype(np.float64)
+X_val = np.random.rand(30, 3).astype(np.float64)
+y_val = np.random.rand(30).astype(np.float64)
+feature_names = []
+for _ in range(3):
+    random_string = ''.join(random.choices(
+        string.ascii_letters + string.digits, k=10))
+    feature_names.append(random_string)
+
+
+# create_estimator for tests
+ce = create_estimator(None, None, None)
+ce.fit(X=X_train, y=y_train, X_val=X_val, y_val=y_val, sanity_check=True)
+y_val_pred_mean_ce, y_val_pred_std_ce = ce.predict(
+    X_val), ce.predict_std(X_val)
+
+# ngboost model for tests
+cngb = CustomNGBRegressor(config=ModelConfig())
+cngb.fit(X_train, y_train, X_val=X_val, Y_val=y_val)
+y_val_pred_mean_cngb, y_train_pred_mean_cngb = cngb.predict(
+    X_val), cngb.predict_std(X_train)
+y_val_pred_std_cngb, y_train_pred_std_cngb = cngb.predict_std(
+    X_val), cngb.predict_std(X_train)
+
+
+# create_estimator for tests
+ttr = create_estimator(None, None, None)
+ttr.transformer.fit(X=y_train)
+y_train_trans = ttr.transformer.transform(X=y_train)
+y_val_trans = ttr.transformer.transform(
+    X=y_val) if y_val is not None else None
+preprocessor = ttr.regressor.named_steps['preprocessor']
+X_train_trans = ttr.preprocess_data(preprocessor, X_train)
+X_val_trans = ttr.preprocess_data(
+    preprocessor, X_val) if X_val is not None else None
+
+y_train_inv_trans = ttr.inverse_transform_data(
+    ttr.transformer, y_train_trans).ravel()
+y_val_inv_trans = ttr.inverse_transform_data(
+    ttr.transformer, y_val_trans).ravel()
+
+regressor = ttr.regressor.named_steps['regressor']
+regressor.fit(X=X_train_trans, y=y_train_trans,
+              X_val=X_val_trans, y_val=y_val_trans)
+
+y_train_pred = regressor.predict(X_train_trans)
+y_train_pred_inv_trans = ttr.transformer.inverse_transform(
+    y_train_pred).ravel()
+y_train_pred_std = regressor.predict_std(X_train_trans)
+y_train_pred_upper = y_train_pred + y_train_pred_std
+y_train_pred_lower = y_train_pred - y_train_pred_std
+y_train_pred_upper_inv_trans = ttr.transformer.inverse_transform(
+    y_train_pred_upper).ravel()
+y_train_pred_lower_inv_trans = ttr.transformer.inverse_transform(
+    y_train_pred_lower).ravel()
+y_train_pred_std_inv_trans = (
+    y_train_pred_upper_inv_trans-y_train_pred_lower_inv_trans)/2
+
+
+y_val_pred = regressor.predict(X_val_trans)
+y_val_pred_inv_trans = ttr.transformer.inverse_transform(y_val_pred).ravel()
+y_val_pred_std = regressor.predict_std(X_val_trans)
+y_val_pred_upper = y_val_pred + y_val_pred_std
+y_val_pred_lower = y_val_pred - y_val_pred_std
+y_val_pred_upper_inv_trans = ttr.transformer.inverse_transform(
+    y_val_pred_upper).ravel()
+y_val_pred_lower_inv_trans = ttr.transformer.inverse_transform(
+    y_val_pred_lower).ravel()
+y_val_pred_std_inv_trans = (
+    y_val_pred_upper_inv_trans-y_val_pred_lower_inv_trans)/2
+
+
+# modelhandler for tests
+model_handler = ModelHandler(
+    X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, feature_names=feature_names)
+model_handler.fit()
+results = model_handler.predict(X_test=X_val, return_std=True)
+
+# BootstrapHandler for tests
+bootstrap_handler = BootstrapHandler(model_handler=model_handler)
+
+n_jobs_bs = 10
+num_bs_inner = 5
+with Pool(num_bs_inner) as p:
     args = ((bootstrap_handler, j)
-            for j in range(self.num_bs_inner))
+            for j in range(num_bs_inner))
     concat_output = p.starmap(
         BootstrapHandler.bootstrap_func_mp, args)
+
+orig_array, mu_array, std_array, shap_mu_array = np.array(
+    concat_output).T
+'''
