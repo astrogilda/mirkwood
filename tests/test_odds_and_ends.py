@@ -24,10 +24,16 @@ def test_reshape_to_2d_array(numpy_array):
 
 
 @settings(deadline=None)
-@given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=2, max_size=10))
-def test_resample_data(numpy_array):
-    x = y = np.array(numpy_array)
-    unique_elements = len(set(numpy_array))
+@given(st.lists(st.tuples(st.floats(allow_nan=False, allow_infinity=False),
+                          st.floats(allow_nan=False, allow_infinity=False)),
+                min_size=2, max_size=10))
+def test_resample_data(paired_list):
+    x_list, y_list = zip(*paired_list)
+    x = np.array(x_list)
+    y = np.array(y_list)
+
+    unique_elements_x = len(set(x))
+    unique_elements_y = len(set(y))
 
     # Failing case: Should raise error when x and y are not of the same length
     with pytest.raises(ValueError):
@@ -37,14 +43,18 @@ def test_resample_data(numpy_array):
     (res_x, res_y), (oob_x, oob_y) = resample_data(x, y)
     assert res_x.shape[0] == res_y.shape[0] == len(x)
 
-    resampled_unique_elements = len(set(res_x))
-    oob_unique_elements = len(set(oob_x))
+    resampled_unique_elements_x = len(set(res_x))
+    resampled_unique_elements_y = len(set(res_y))
+    oob_unique_elements_x = len(set(oob_x))
+    oob_unique_elements_y = len(set(oob_y))
 
-    assert res_x.shape[0] == res_y.shape[0] == len(x)
-    if unique_elements == 1:
-        assert len(oob_x) == len(oob_y) == 0
+    if unique_elements_x == 1:
+        assert len(oob_x) == 0
+    if unique_elements_y == 1:
+        assert len(oob_y) == 0
 
-    assert resampled_unique_elements + oob_unique_elements >= unique_elements
+    assert resampled_unique_elements_x + oob_unique_elements_x >= unique_elements_x
+    assert resampled_unique_elements_y + oob_unique_elements_y >= unique_elements_y
 
     assert set(np.unique(res_y)).issubset(set(np.unique(y)))
     assert set(np.unique(oob_y)).issubset(set(np.unique(y)))

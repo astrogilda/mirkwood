@@ -38,8 +38,8 @@ class BootstrapHandler(BaseModel):
         Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
             Tuple of prediction mean, std, lower, upper, and mean SHAP values.
         """
-        X_res, y_res = resample_data(
-            self.model_handler.X_train, self.model_handler.y_train, frac_samples=self.frac_samples_best)
+        (X_res, y_res), (X_oob, y_oob) = resample_data(
+            self.model_handler.X_train, self.model_handler.y_train, frac_samples=self.frac_samples_best, seed=iteration_num, replace=True)
         self.model_handler.X_train = X_res
         self.model_handler.y_train = y_res
 
@@ -51,15 +51,18 @@ class BootstrapHandler(BaseModel):
         # self.model_handler.file_path = file_path
         # self.model_handler.shap_file_path = shap_file_path
 
+        X_test = self.model_handler.X_val if self.model_handler.X_val is not None else X_oob
+        y_test = self.model_handler.y_val if self.model_handler.y_val is not None else y_oob
+
         self.model_handler.fit()
         y_pred_mean, y_pred_std = self.model_handler.predict(
-            X_test=self.model_handler.X_val, return_std=True)
+            X_test=X_test, return_std=True)
         shap_values_mean = self.model_handler.calculate_shap_values(
-            X_test=self.model_handler.X_val)
+            X_test=X_test)
         y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
             y_pred_std, y_pred_mean + self.z_score * y_pred_std
 
         # Create mask for invalid values
         mask = np.ma.masked_invalid
 
-        return reshape_to_2d_array(mask(y_val)) if self.galaxy_property is not None else reshape_to_2d_array(self.model_handler.y_val), reshape_to_2d_array(mask(y_pred_mean)), reshape_to_2d_array(mask(y_pred_std)), reshape_to_2d_array(mask(shap_values_mean))
+        return reshape_to_2d_array(mask(y_test)), reshape_to_2d_array(mask(y_pred_mean)), reshape_to_2d_array(mask(y_pred_std)), reshape_to_2d_array(mask(shap_values_mean))

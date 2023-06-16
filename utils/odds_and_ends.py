@@ -93,27 +93,31 @@ def resample_data(*arrays: np.ndarray, frac_samples: float = 1, seed: int = 0, r
 
     logging.info(f'Resampling to {frac_samples} percentage samples.')
 
-    # Check for unique elements and set replace accordingly
-    idx = np.arange(len(arrays[0]))
-    unique_elements = len(set(arrays[0]))
+    # Initialize tuples to store results
+    resampled_arrays = ()
+    oob_arrays = ()
 
-    if unique_elements == 1:
-        if frac_samples < 1:
-            # If all elements are the same, manually calculate in-bootstrap and out-of-bootstrap indices
-            n_resampled = int(frac_samples * len(idx))
-            resampled_idx = idx[:n_resampled]
-            oob_idx = idx[n_resampled:]
-            resampled_arrays = tuple(arr[resampled_idx] for arr in arrays)
-            oob_arrays = tuple(arr[oob_idx] for arr in arrays)
+    for arr in arrays:
+        unique_elements = len(np.unique(arr))
+        idx = np.arange(len(arr))
+
+        if unique_elements == 1:
+            if frac_samples < 1:
+                # If all elements are the same, manually calculate in-bootstrap and out-of-bootstrap indices
+                n_resampled = int(frac_samples * len(idx))
+                resampled_idx = idx[:n_resampled]
+                oob_idx = idx[n_resampled:]
+                resampled_arrays += (arr[resampled_idx],)
+                oob_arrays += (arr[oob_idx],)
+            else:
+                # return input arrays as resampled data and empty arrays for out-of-bag data
+                resampled_arrays += (arr,)
+                oob_arrays += (np.array([], dtype=arr.dtype),)
         else:
-            #  return input arrays as resampled data and empty arrays for out-of-bag data
-            resampled_arrays = tuple(arr for arr in arrays)
-            oob_arrays = tuple(np.array([], dtype=arr.dtype) for arr in arrays)
-    else:
-        idx_res, idx_oob = _numba_resample_and_oob(
-            idx, frac_samples, seed, replace)
-        resampled_arrays = tuple(arr[idx_res] for arr in arrays)
-        oob_arrays = tuple(arr[idx_oob] for arr in arrays)
+            idx_res, idx_oob = _numba_resample_and_oob(
+                idx, frac_samples, seed, replace)
+            resampled_arrays += (arr[idx_res],)
+            oob_arrays += (arr[idx_oob],)
 
     logging.info(
         f'Resampled {len(resampled_arrays)} arrays, obtained {len(oob_arrays)} out-of-bag arrays.')
