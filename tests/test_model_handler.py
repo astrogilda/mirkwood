@@ -73,7 +73,31 @@ def test_fit_load_estimator_file_not_exists(dummy_model_handler: ModelHandler):
         dummy_model_handler.fit()
 
 
+@pytest.mark.parametrize("fit_before_predict, X_test, expected_exception", [
+    (False, np.random.randn(10, len(FEATURE_NAMES)), NotFittedError),
+    (True, 'invalid_input', TypeError),
+    (True, np.random.randn(10, len(FEATURE_NAMES) + 1), ValueError)
+])
+def test_calculate_shap_values_exception(dummy_model_handler: ModelHandler, fit_before_predict, X_test, expected_exception):
+    if fit_before_predict:
+        dummy_model_handler.fit()
+
+    with pytest.raises(expected_exception):
+        dummy_model_handler.calculate_shap_values(X_test=X_test)
+
+
+@pytest.mark.parametrize("fit_before_create_explainer", [True, False])
+def test_create_explainer(dummy_model_handler: ModelHandler, fit_before_create_explainer):
+    if not fit_before_create_explainer:
+        with pytest.raises(NotFittedError):
+            dummy_model_handler.create_explainer()
+    else:
+        dummy_model_handler.fit()
+        dummy_model_handler.create_explainer()
+        assert dummy_model_handler.explainer is not None
+
 # ModelHandlerConfig tests
+
 
 def test_empty_X_train():
     X = np.array([[], [], []])
@@ -89,7 +113,7 @@ def test_empty_X_train():
 def test_unequal_X_y_length():
     X = np.array([[1, 2, 3], [4, 5, 6]])
     y = np.array([1, 2, 3])
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         ModelHandlerConfig(
             X_train=X,
             y_train=y,
@@ -119,4 +143,55 @@ def test_invalid_fit_params():
             feature_names=["feature1", "feature2", "feature3"],
             weight_flag="qwerty",
             model_config="abc"
+        )
+
+
+def test_model_handler_config_mismatched_val_arrays():
+    X_val = np.array([[1, 2, 3], [4, 5, 6]])
+    y_val = np.array([1, 2])
+    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValueError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val
+        )
+
+
+def test_model_handler_config_invalid_array():
+    X_train = 'invalid_array'
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValidationError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            feature_names=["feature1", "feature2", "feature3"]
+        )
+
+
+def test_model_handler_config_non_2d_X_train():
+    X_train = np.array([1, 2, 3])
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValueError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            feature_names=["feature1", "feature2", "feature3"]
+        )
+
+
+def test_model_handler_config_non_1d_y_train():
+    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+    with pytest.raises(ValueError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            feature_names=["feature1", "feature2", "feature3"]
         )

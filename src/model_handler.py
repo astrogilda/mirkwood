@@ -5,7 +5,7 @@ import warnings
 from joblib import dump, load
 from numpy import ndarray
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 from typing import Any, Optional, Tuple, List
@@ -58,60 +58,50 @@ class ModelHandlerConfig(BaseModel):
 
     @staticmethod
     def _validate_X_y_pair(X_name: str, y_name: str, values: Dict[str, Any]) -> None:
-        """
-        Helper function to validate that both X and y arrays are either None or not None,
-        and if they are not None, they have the same number of elements.
-
-        :param X_name: Name of the X array field (e.g., 'X_train' or 'X_val')
-        :param y_name: Name of the y array field (e.g., 'y_train' or 'y_val')
-        :param values: Dictionary of field values
-        """
         if X_name in values and y_name in values:
             if (values[X_name] is None) != (values[y_name] is None):
                 raise ValueError(
                     f"{X_name} and {y_name} must be both None or not None")
-            if values[X_name] is not None and len(values[X_name]) != len(values[y_name]):
+            if values[X_name] is not None and values[X_name].shape[0] != len(values[y_name]):
                 raise ValueError(
                     f"{X_name} and {y_name} must have the same number of elements")
 
-    @validator('X_val', 'y_val', always=True)
-    def check_val(cls, value, values, field):
-        # Validate that X_val and y_val are either both None or not None,
-        # and if they are not None, they have the same number of elements
-        cls._validate_X_y_pair('X_val', 'y_val', values)
-        return value
-
-    @validator('X_train', 'y_train', always=True)
-    def check_lengths(cls, value, values, field):
-        # Validate that X_train and y_train are either both None or not None,
-        # and if they are not None, they have the same number of elements
-        if field.name in ['X_train', 'y_train']:
+    @validator('X_val', 'y_val', 'X_train', 'y_train', pre=True)
+    def check_pairs(cls, value, values, field):
+        if field.name in ['X_val', 'y_val']:
+            cls._validate_X_y_pair('X_val', 'y_val', values)
+        elif field.name in ['X_train', 'y_train']:
             cls._validate_X_y_pair('X_train', 'y_train', values)
         return value
 
     @validator('X_train', 'X_val', pre=True, always=True)
-    def validate_arrays(cls, value):
-        # Validate that X_train and X_val are valid numpy arrays
+    def validate_X_arrays(cls, value):
         if value is not None:
             value = check_array(value)
         return value
 
     @validator('y_train', 'y_val', pre=True, always=True)
     def validate_y_arrays(cls, value):
-        # Validate that y_train and y_val are valid numpy arrays with the proper shape
         if value is not None:
             value = check_array(value, ensure_2d=False)
+            if value.ndim != 1:
+                raise ValueError("y arrays must be 1-dimensional")
         return value
 
     @validator('feature_names', always=True)
     def validate_feature_names(cls, value, values):
-        # Validate that the length of feature_names matches the number of columns in X_train
         if 'X_train' in values and values['X_train'] is not None:
             X_train = values['X_train']
             if len(value) != X_train.shape[1]:
                 raise ValueError(
                     f"The length of 'feature_names' ({len(value)}) must be the same as the number of columns in 'X_train' ({X_train.shape[1]})")
         return value
+
+    @root_validator
+    def validate(cls, values):
+        cls._validate_X_y_pair('X_train', 'y_train', values)
+        cls._validate_X_y_pair('X_val', 'y_val', values)
+        return values
 
 
 class ModelHandler:
