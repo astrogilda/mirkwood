@@ -4,6 +4,10 @@ import numpy as np
 from src.model_handler import ModelHandler
 from src.data_handler import DataHandler, GalaxyProperty
 from utils.odds_and_ends import resample_data, reshape_to_2d_array
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class BootstrapHandler(BaseModel):
@@ -19,10 +23,6 @@ class BootstrapHandler(BaseModel):
     """
     model_handler: ModelHandler
     frac_samples_best: float = Field(default=0.8, gt=0, le=1)
-    z_score: confloat(gt=0, le=5) = Field(
-        default=1.96,
-        description="The z-score for the confidence interval. Defaults to 1.96, which corresponds to a 95 per cent confidence interval."
-    )
 
     def bootstrap_func_mp(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -38,6 +38,15 @@ class BootstrapHandler(BaseModel):
         Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
             Tuple of prediction mean, std, lower, upper, and mean SHAP values.
         """
+        msg = "Iteration number must be a non-negative integer."
+
+        if not isinstance(iteration_num, int):
+            logger.error(msg)
+            raise TypeError(msg)
+        elif iteration_num < 0:
+            logger.error(msg)
+            raise ValueError(msg)
+
         (X_res, y_res), (X_oob, y_oob) = resample_data(
             self.model_handler.X_train, self.model_handler.y_train, frac_samples=self.frac_samples_best, seed=iteration_num, replace=True)
         self.model_handler.X_train = X_res
@@ -59,8 +68,6 @@ class BootstrapHandler(BaseModel):
             X_test=X_test, return_std=True)
         shap_values_mean = self.model_handler.calculate_shap_values(
             X_test=X_test)
-        y_pred_lower, y_pred_upper = y_pred_mean - self.z_score * \
-            y_pred_std, y_pred_mean + self.z_score * y_pred_std
 
         # Create mask for invalid values
         mask = np.ma.masked_invalid

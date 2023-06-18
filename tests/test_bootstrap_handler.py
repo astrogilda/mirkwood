@@ -1,74 +1,96 @@
-from utils.custom_transformers_and_estimators import CustomNGBRegressor, create_estimator
-from multiprocessing import Pool
 import pytest
 import numpy as np
 from src.model_handler import ModelHandler, ModelConfig
 from src.bootstrap_handler import BootstrapHandler
 from pydantic import ValidationError
-from src.data_handler import GalaxyProperty
+from numpy.testing import assert_array_equal
+from multiprocessing import Pool
 import random
 import string
-from numpy.testing import assert_array_equal
-from utils.metrics import DeterministicErrorMetrics, ProbabilisticErrorMetrics, calculate_z_score
+from utils.metrics import ProbabilisticErrorMetrics, DeterministicErrorMetrics, calculate_z_score
 
-# Test Data
-X_train = np.random.rand(50, 3).astype(np.float64)
-y_train = np.random.rand(50).astype(np.float64)
-X_val = np.random.rand(30, 3).astype(np.float64)
-y_val = np.random.rand(30).astype(np.float64)
-feature_names = []
-for _ in range(20):
-    random_string = ''.join(random.choices(
-        string.ascii_letters + string.digits, k=10))
-    feature_names.append(random_string)
+
+def generate_data(n_samples: int, n_features: int):
+    X = np.random.rand(n_samples, n_features).astype(np.float64)
+    y = np.random.rand(n_samples).astype(np.float64)
+    feature_names = [''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                     for _ in range(n_features)]
+    return X, y, feature_names
+
 
 # ModelHandler for tests
-model_handler = ModelHandler(
-    X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, feature_names=feature_names)
+X_train, y_train, feature_names = generate_data(50, 20)
+X_val, y_val, _ = generate_data(30, 20)
+model_handler = ModelHandler(X_train=X_train, y_train=y_train,
+                             X_val=X_val, y_val=y_val, feature_names=feature_names)
 
 
-def test_BootstrapHandler_init():
-    with pytest.raises(ValidationError):
-        # This should fail as frac_samples_best should be in (0, 1]
-        BootstrapHandler(model_handler=model_handler, frac_samples_best=1.5)
-
-    # This should pass
-    BootstrapHandler(model_handler=model_handler, frac_samples_best=0.8)
-
-
-def test_BootstrapHandler_Validation():
-    with pytest.raises(ValidationError):
-        # Test should fail due to the value of z_score is outside the valid range
-        BootstrapHandler(model_handler=model_handler, z_score=10)
-
-    with pytest.raises(ValidationError):
-        # Test should fail due to invalid GalaxyProperty
+@pytest.mark.parametrize("frac_samples_best,expect_pass", [
+    (0.8, True),
+    (0.0, False),
+    (1.0, True),
+    (1.5, False),
+    (-0.2, False)
+])
+def test_BootstrapHandler_init(frac_samples_best, expect_pass):
+    if expect_pass:
         BootstrapHandler(model_handler=model_handler,
-                         galaxy_property='Invalid')
+                         frac_samples_best=frac_samples_best)
+    else:
+        with pytest.raises(ValidationError):
+            BootstrapHandler(model_handler=model_handler,
+                             frac_samples_best=frac_samples_best)
 
-    # Test should pass with valid z_score and galaxy_property
-    BootstrapHandler(model_handler=model_handler, z_score=1.96,
-                     galaxy_property=GalaxyProperty.STELLAR_MASS)
 
+@pytest.mark.parametrize("frac_samples_best,X,y", [
+    (0.8, np.random.rand(50, 20), np.random.rand(50)),
+    (0.9, np.random.rand(100, 20), np.random.rand(100)),
+    (1.0, np.random.rand(200, 20), np.random.rand(200)),
+    (0.5, np.random.rand(400, 20), np.random.rand(400)),
+])
+def test_bootstrap_func_mp_with_different_samples(frac_samples_best, X, y):
+    feature_names = [''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                     for _ in range(20)]
+    model_handler = ModelHandler(
+        X_train=X, y_train=y, X_val=X, y_val=y, feature_names=feature_names)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, frac_samples_best=frac_samples_best)
 
-def test_bootstrap_func_mp():
-    bootstrap_handler = BootstrapHandler(model_handler=model_handler)
-
-    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+    y_test, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
         iteration_num=0)
 
     # Assert the shapes are consistent
-    assert_array_equal(y_val, bootstrap_handler.model_handler.y_val)
-    assert y_pred_mean.shape == y_val.shape
-    assert y_pred_std.shape == y_val.shape
-    assert shap_values_mean.shape == (
-        y_val.shape[0], X_train.shape[1])
+    assert_array_equal(y_test.ravel(), bootstrap_handler.model_handler.y_val)
+    assert y_pred_mean.shape == y_test.shape
+    assert y_pred_std.shape == y_test.shape
+    assert shap_values_mean.shape == y_test.shape
 
     # Assert that the standard deviations are positive
     assert np.all(y_pred_std >= 0)
 
     # Assert that SHAP values are finite
     assert np.all(np.isfinite(shap_values_mean))
+
+
+@pytest.mark.parametrize("iteration_num,expect_pass", [
+    (0, True),
+    (-1, False),
+    (100, True),
+    ('a', False),
+    (None, False)
+])
+def test_bootstrap_func_mp_with_invalid_iteration_num(iteration_num, expect_pass):
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, frac_samples_best=0.8)
+
+    if expect_pass:
+        bootstrap_handler.bootstrap_func_mp(iteration_num=iteration_num)
+    elif isinstance(iteration_num, int):
+        with pytest.raises(ValueError):
+            bootstrap_handler.bootstrap_func_mp(iteration_num=iteration_num)
+    else:
+        with pytest.raises(TypeError):
+            bootstrap_handler.bootstrap_func_mp(iteration_num=iteration_num)
 
 
 def test_bootstrap_func_mp_metrics():

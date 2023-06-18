@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given, strategies as st, settings
 from utils.custom_transformers_and_estimators import *
 from utils.custom_transformers_and_estimators import _MultipleTransformer
-from utils.odds_and_ends import *
+from utils.validate import *
 
 from ngboost.distns import Normal
 from ngboost.scores import LogScore

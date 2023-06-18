@@ -2,7 +2,7 @@
 from src.data_handler import GalaxyProperty
 from utils.weightify import Weightify
 from sklearn.pipeline import Pipeline
-from utils.odds_and_ends import reshape_to_1d_array, reshape_to_2d_array
+from utils.validate import reshape_to_1d_array, reshape_to_2d_array
 from typing import Any, List, Optional, Union, Tuple, Dict, Callable
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
@@ -482,7 +482,7 @@ class PostProcessY(BaseEstimator, TransformerMixin):
         The galaxy property to apply the inverse transform.
     """
 
-    def __init__(self, prop: GalaxyProperty):
+    def __init__(self, prop: Optional[GalaxyProperty]):
         self.prop = prop
         self.inverse_transforms = self._get_label_rev_func()
 
@@ -513,8 +513,11 @@ class PostProcessY(BaseEstimator, TransformerMixin):
         Union[np.ndarray, Tuple[np.ndarray]]
             Postprocessed data.
         """
-        postprocessed_ys = [self._apply_inverse_transform(y) for y in ys]
-        return tuple(postprocessed_ys) if len(postprocessed_ys) > 1 else postprocessed_ys[0]
+        if self.prop is None:
+            return ys
+        else:
+            postprocessed_ys = [self._apply_inverse_transform(y) for y in ys]
+            return tuple(postprocessed_ys) if len(postprocessed_ys) > 1 else postprocessed_ys[0]
 
     def _apply_inverse_transform(self, y: np.ndarray) -> np.ndarray:
         """Apply the inverse transformation for the specific galaxy property."""
