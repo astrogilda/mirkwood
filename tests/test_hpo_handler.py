@@ -3,7 +3,7 @@ import pytest
 from hypothesis import given, strategies as st, settings
 from sklearn.datasets import load_diabetes
 from sklearn.model_selection import train_test_split
-from src.hpo_handler import HPOHandler, HPOHandlerParams, ParamGridConfig, crps_scorer
+from src.hpo_handler import HPOHandler, HPOHandlerConfig, ParamGridConfig, crps_scorer
 import optuna
 from utils.custom_cv import CustomCV
 
@@ -30,7 +30,7 @@ def test_hpo_handler_fit_and_predict_and_predict_std(n_trials):
     """
     X_train, X_val, y_train, y_val, param_grid, cv = common_setup()
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=n_trials, loss=crps_scorer, cv=cv, timeout=5*60)
 
     hpo = HPOHandler(params=params)
@@ -68,7 +68,7 @@ def test_hpo_handler_with_invalid_param(params):
         minibatch_frac=minibatch_frac
     )
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=5*60)
 
     hpo = HPOHandler(params=params)
@@ -84,7 +84,7 @@ def test_hpo_handler_no_cv():
     """
     X_train, _, y_train, y_val, param_grid, _ = common_setup()
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[], timeout=5*60)
 
     hpo = HPOHandler(params=params)
@@ -99,7 +99,7 @@ def test_hpo_handler_no_data_fit():
     """
     _, _, _, _, param_grid, _ = common_setup()
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[], timeout=5*60)
 
     hpo = HPOHandler(params=params)
@@ -114,7 +114,7 @@ def test_hpo_handler_predict_without_fit():
     """
     _, _, _, _, param_grid, _ = common_setup()
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[], timeout=5*60)
 
     hpo = HPOHandler(params=params)
@@ -129,7 +129,7 @@ def test_hpo_handler_predict_std_without_fit():
     """
     _, _, _, _, param_grid, _ = common_setup()
 
-    params = HPOHandlerParams(
+    params = HPOHandlerConfig(
         param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[], timeout=5*60)
 
     hpo = HPOHandler(params=params)

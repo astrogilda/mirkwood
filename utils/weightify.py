@@ -7,7 +7,7 @@ from scipy.stats import gaussian_kde
 from scipy.ndimage import convolve1d, gaussian_filter1d
 import numpy as np
 from sklearn.utils.validation import check_is_fitted
-from utils.validate import reshape_to_1d_array
+from utils.reshape import reshape_to_1d_array
 
 
 class Style(str, Enum):

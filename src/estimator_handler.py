@@ -4,7 +4,7 @@ from sklearn.exceptions import NotFittedError
 from utils.custom_transformers_and_estimators import (
     CustomTransformedTargetRegressor, create_estimator)
 from src.model_handler import ModelHandlerConfig
-from utils.odds_and_ends import validate_file_path
+from utils.validate import validate_file_path
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -83,15 +83,17 @@ class EstimatorHandler:
         self._fitted = True
         self._save_estimator()
 
-    def _save_estimator(self) -> None:
-        """
-        Save the estimator to a file specified by file_path.
-        """
-        # Save both the estimator and its fitted status
-        dump({
-            'estimator': self.estimator,
-            'is_fitted': self._fitted
-        }, self._config.file_path)
+    def _save_estimator(self):
+        if self._config.file_path is not None:
+            try:
+                dump({
+                    "estimator": self.estimator,
+                    "is_fitted": self.is_fitted
+                }, self._config.file_path)
+            except (ValueError, IOError) as e:
+                logger.warning(f"Failed to save the estimator: {e}")
+        else:
+            logger.warning("No filename provided. Skipping save.")
 
     def _load_estimator(self) -> None:
         """

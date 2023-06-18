@@ -10,7 +10,7 @@ from src.model_handler import ModelHandler
 from pydantic_numpy import NDArrayFp64
 from pathlib import Path
 from src.data_handler import GalaxyProperty, DataHandler
-from src.hpo_handler import HPOHandler, HPOHandlerParams, PipelineConfig
+from src.hpo_handler import HPOHandler, HPOHandlerConfig, PipelineConfig
 import scipy.stats as stats
 from pydantic.fields import ModelField
 from utils.custom_cv import CustomCV
@@ -44,7 +44,7 @@ class TrainPredictHandler(BaseModel):
     X_transformer: XTransformer = XTransformer()  # Default XTransformer
     y_transformer: YTransformer = YTransformer()  # Default YTransformer
     model_config: ModelConfig = ModelConfig()
-    frac_samples_best: float = Field(0.8, gt=0, le=1)
+    frac_samples: float = Field(0.8, gt=0, le=1)
     galaxy_property: GalaxyProperty = Field(GalaxyProperty.STELLAR_MASS)
     property_name: Optional[str] = None
     testfoldnum: int = 0
@@ -166,7 +166,7 @@ class TrainPredictHandler(BaseModel):
             # carry out hyperparameter tuning
             timeout = 60 * 60  # 1 hour
             n_trials = 100
-            hpo_handler = HPOHandler(params=HPOHandlerParams(estimator=estimator,
+            hpo_handler = HPOHandler(params=HPOHandlerConfig(estimator=estimator,
                                                              cv=cv_inner, z_score=z_score, n_jobs=self.n_jobs_hpo, timeout=timeout, n_trials=n_trials), weight_flag=self.weight_flag)
             hpo_handler.fit(X_train=X_train, y_train=y_train)
             best_estimator = hpo_handler.params.estimator
@@ -191,13 +191,13 @@ class TrainPredictHandler(BaseModel):
 
             # create a BootstrapHandler for each fold
             bootstrap_handler = BootstrapHandler(
-                model_handler=model_handler, frac_samples_best=self.frac_samples_best, galaxy_property=self.galaxy_property, z_score=z_score)
+                model_handler=model_handler, frac_samples=self.frac_samples, galaxy_property=self.galaxy_property, z_score=z_score)
 
             with Pool(self.num_bs_inner) as p:
                 args = ((bootstrap_handler, j)
                         for j in range(self.num_bs_inner))
                 concat_output = p.starmap(
-                    BootstrapHandler.bootstrap_func_mp, args)
+                    BootstrapHandler.bootstrap, args)
 
             yval_outputs = TrainPredictHandler.process_concat_output(
                 concat_output)

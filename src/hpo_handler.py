@@ -42,7 +42,7 @@ class ParamGridConfig(BaseModel):
         arbitrary_types_allowed: bool = True
 
 
-class HPOHandlerParams(BaseModel):
+class HPOHandlerConfig(BaseModel):
     """
     Pydantic model for the parameters of HPOHandler.
     """
@@ -80,7 +80,7 @@ class HPOHandler(BaseModel):
     """
     Handler for hyperparameter optimization.
     """
-    params: HPOHandlerParams = Field(...,
+    params: HPOHandlerConfig = Field(...,
                                      description="Parameters of HPOHandler")
     # Do not use this directly, use is_model_fitted instead
     best_trial: Optional[Trial] = None

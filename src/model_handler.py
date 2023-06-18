@@ -10,14 +10,15 @@ from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 from typing import Any, Optional, Tuple, List
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
-from utils.odds_and_ends import reshape_to_1d_array, validate_inputs_to_npndarray
+from utils.validate import validate_npndarray_input
+from utils.reshape import reshape_to_1d_array
 from utils.custom_transformers_and_estimators import (
     ModelConfig, XTransformer, YTransformer, create_estimator,
     CustomTransformedTargetRegressor, PostProcessY)
 from src.data_handler import GalaxyProperty
 import numpy as np
-from src.estimator_handler import EstimatorHandler
 import shap
+from sklearn.utils.validation import check_array
 
 # Suppress deprecation warnings
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
@@ -43,6 +44,7 @@ class ModelHandlerConfig(BaseModel):
     fitting_mode: bool = True
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
+    shap_values_path: Optional[Path] = None
     model_config: ModelConfig = ModelConfig()
     X_transformer: XTransformer = XTransformer()
     y_transformer: YTransformer = YTransformer()
@@ -52,21 +54,61 @@ class ModelHandlerConfig(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+    @staticmethod
+    def _validate_X_y_pair(X_name: str, y_name: str, values: Dict[str, Any]) -> None:
+        """
+        Helper function to validate that both X and y arrays are either None or not None,
+        and if they are not None, they have the same number of elements.
+
+        :param X_name: Name of the X array field (e.g., 'X_train' or 'X_val')
+        :param y_name: Name of the y array field (e.g., 'y_train' or 'y_val')
+        :param values: Dictionary of field values
+        """
+        if X_name in values and y_name in values:
+            if (values[X_name] is None) != (values[y_name] is None):
+                raise ValueError(
+                    f"{X_name} and {y_name} must be both None or not None")
+            if values[X_name] is not None and len(values[X_name]) != len(values[y_name]):
+                raise ValueError(
+                    f"{X_name} and {y_name} must have the same number of elements")
+
     @validator('X_val', 'y_val', always=True)
     def check_val(cls, value, values, field):
-        if field.name == 'X_val' and 'y_val' in values and values['y_val'] is not None and value is None:
-            raise ValueError('X_val cannot be None when y_val is not None')
-        if field.name == 'y_val' and 'X_val' in values and values['X_val'] is not None and value is None:
-            raise ValueError('y_val cannot be None when X_val is not None')
+        # Validate that X_val and y_val are either both None or not None,
+        # and if they are not None, they have the same number of elements
+        cls._validate_X_y_pair('X_val', 'y_val', values)
         return value
 
-    @validator('X_train', 'y_train', 'X_val', 'y_val', always=True)
+    @validator('X_train', 'y_train', always=True)
     def check_lengths(cls, value, values, field):
-        if field.name in ['X_train', 'X_val']:
-            y_name = 'y_train' if field.name == 'X_train' else 'y_val'
-            if y_name in values and values[y_name] is not None and value is not None and len(value) != len(values[y_name]):
+        # Validate that X_train and y_train are either both None or not None,
+        # and if they are not None, they have the same number of elements
+        if field.name in ['X_train', 'y_train']:
+            cls._validate_X_y_pair('X_train', 'y_train', values)
+        return value
+
+    @validator('X_train', 'X_val', pre=True, always=True)
+    def validate_arrays(cls, value):
+        # Validate that X_train and X_val are valid numpy arrays
+        if value is not None:
+            value = check_array(value)
+        return value
+
+    @validator('y_train', 'y_val', pre=True, always=True)
+    def validate_y_arrays(cls, value):
+        # Validate that y_train and y_val are valid numpy arrays with the proper shape
+        if value is not None:
+            value = check_array(value, ensure_2d=False)
+        return value
+
+    @validator('feature_names', always=True)
+    def validate_feature_names(cls, value, values):
+        # Validate that the length of feature_names matches the number of columns in X_train
+        if 'X_train' in values and values['X_train'] is not None:
+            X_train = values['X_train']
+            if len(value) != X_train.shape[1]:
                 raise ValueError(
-                    f'{field.name} and {y_name} must have the same number of elements')
+                    f"The length of 'feature_names' ({len(value)}) must be the same as the number of columns in 'X_train' ({X_train.shape[1]})")
         return value
 
 
@@ -77,6 +119,10 @@ class ModelHandler(BaseModel):
     """
 
     def __init__(self, config: ModelHandlerConfig) -> None:
+
+        from src.estimator_handler import EstimatorHandler
+        from src.shap_handler import ShapHandler
+
         self._config = config
         self._estimator_handler = EstimatorHandler(config)
         self._shap_handler = ShapHandler(config)
@@ -113,7 +159,7 @@ class ModelHandler(BaseModel):
         Returns:
             Tuple of arrays: predicted target variable and uncertainty.
         """
-        validate_inputs_to_npndarray(X_test)
+        validate_npndarray_input(X_test)
         y_pred = self._predict_with_estimator(X_test)
         y_pred_mean, y_pred_std = PostProcessY.transform(
             y_pred, self._config.galaxy_property)
@@ -139,7 +185,7 @@ class ModelHandler(BaseModel):
         Returns:
             Array of SHAP values.
         """
-        self._validate_inputs_to_npndarray(X_test)
+        validate_npndarray_input(X_test)
         shap_pred = self._calculate_shap_values_with_explainer(X_test)
         return shap_pred
 

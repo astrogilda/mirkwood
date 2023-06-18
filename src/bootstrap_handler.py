@@ -1,13 +1,29 @@
-from pydantic import BaseModel, Field, confloat
-from typing import Optional, Tuple
-import numpy as np
+from typing import Tuple
+from pydantic import BaseModel, Field
 from src.model_handler import ModelHandler
-from src.data_handler import DataHandler, GalaxyProperty
-from utils.odds_and_ends import resample_data, reshape_to_2d_array
+from utils.resample import Resampler, ResamplerConfig
+from utils.reshape import reshape_to_2d_array
+import numpy as np
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# Set up logging
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+class BootstrapConfig(BaseModel):
+    """
+    BootstrapConfig class for setting up bootstrapping process.
+
+    Attributes
+    ----------
+    frac_samples : float
+        Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
+    seed : int
+        Seed for the random number generator. Used for reproducibility.
+    """
+    frac_samples: float = Field(default=0.8, gt=0, le=1)
+    seed: int = Field(default=None, ge=0, le=2**32-1)
 
 
 class BootstrapHandler(BaseModel):
@@ -18,58 +34,46 @@ class BootstrapHandler(BaseModel):
     ----------
     model_handler : ModelHandler
         Model handler object for accessing x and y data.
-    frac_samples_best : float
-        Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
+    bootstrap_config : BootstrapConfig
+        Bootstrapping configuration object.
     """
     model_handler: ModelHandler
-    frac_samples_best: float = Field(default=0.8, gt=0, le=1)
+    bootstrap_config: BootstrapConfig
 
-    def bootstrap_func_mp(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Perform bootstrapping for model training and prediction.
+    def __init__(self, model_handler: ModelHandler, bootstrap_config: BootstrapConfig):
+        self.model_handler = model_handler
+        self.bootstrap_config = bootstrap_config
 
-        Parameters
-        ----------
-        iteration_num : int
-            Iteration number for current bootstrap iteration.
+    def _resample(self):
+        (X_ib, y_ib), (X_oob, y_oob), (X_ib_idx, y_ib_idx), (X_oob_idx, y_oob_idx) = Resampler(
+            ResamplerConfig(
+                frac_samples=self.bootstrap_config.frac_samples, seed=self.bootstrap_config.seed, replace=True)
+        ).resample_data(self.model_handler._config.X_train, self.model_handler._config.y_train)
 
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-            Tuple of prediction mean, std, lower, upper, and mean SHAP values.
-        """
-        msg = "Iteration number must be a non-negative integer."
+        self.model_handler._config.X_train = X_ib
+        self.model_handler._config.y_train = y_ib
 
-        if not isinstance(iteration_num, int):
-            logger.error(msg)
-            raise TypeError(msg)
-        elif iteration_num < 0:
-            logger.error(msg)
-            raise ValueError(msg)
+        return X_ib, y_ib, X_oob, y_oob, X_ib_idx, y_ib_idx, X_oob_idx, y_oob_idx
 
-        (X_res, y_res), (X_oob, y_oob) = resample_data(
-            self.model_handler.X_train, self.model_handler.y_train, frac_samples=self.frac_samples_best, seed=iteration_num, replace=True)
-        self.model_handler.X_train = X_res
-        self.model_handler.y_train = y_res
+    def bootstrap(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        logger.info(f"Starting bootstrap iteration: {iteration_num}")
 
-        # file_path = self.model_handler.file_path / \
-        #    f'ngb_prop={property_name}_fold={testfoldnum}_bag={iteration_num}.pkl'
-        # shap_file_path = self.model_handler.shap_file_path / \
-        #    f'shap_prop={property_name}_fold={testfoldnum}_bag={iteration_num}.pkl'
+        X_ib, y_ib, X_oob, y_oob, X_ib_idx, y_ib_idx, X_oob_idx, y_oob_idx = self._resample(
+            iteration_num)
 
-        # self.model_handler.file_path = file_path
-        # self.model_handler.shap_file_path = shap_file_path
+        X_test = self.model_handler._config.X_val if self.model_handler._config.X_val is not None else X_oob
+        y_test = self.model_handler._config.y_val if self.model_handler._config.y_val is not None else y_oob
 
-        X_test = self.model_handler.X_val if self.model_handler.X_val is not None else X_oob
-        y_test = self.model_handler.y_val if self.model_handler.y_val is not None else y_oob
-
+        logger.info("Fitting the model...")
         self.model_handler.fit()
-        y_pred_mean, y_pred_std = self.model_handler.predict(
-            X_test=X_test, return_std=True)
+
+        logger.info("Making predictions...")
+        y_pred_mean, y_pred_std = self.model_handler.predict(X_test=X_test)
+
+        logger.info("Calculating SHAP values...")
         shap_values_mean = self.model_handler.calculate_shap_values(
             X_test=X_test)
 
-        # Create mask for invalid values
         mask = np.ma.masked_invalid
 
         return reshape_to_2d_array(mask(y_test)), reshape_to_2d_array(mask(y_pred_mean)), reshape_to_2d_array(mask(y_pred_std)), reshape_to_2d_array(mask(shap_values_mean))

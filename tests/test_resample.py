@@ -3,7 +3,7 @@ from hypothesis import given, settings, strategies as st
 from hypothesis.extra.numpy import arrays
 import numpy as np
 from pydantic import ValidationError
-from utils.resample import ResamplingParams, Resampler
+from utils.resample import ResamplerConfig, Resampler
 
 # Test normal resampling cases
 
@@ -15,7 +15,7 @@ from utils.resample import ResamplingParams, Resampler
 def test_normal_resample_data(paired_list):
     x_list, y_list = zip(*paired_list)
     x, y = np.array(x_list), np.array(y_list)
-    resampler = Resampler(ResamplingParams(
+    resampler = Resampler(ResamplerConfig(
         frac_samples=0.5, seed=0, replace=False))
 
     if len(set(x)) > 2 and len(set(y)) > 2:
@@ -40,7 +40,7 @@ def test_normal_resample_data(paired_list):
 def test_failing_resample_data(frac_samples, seed, expected_error):
     array = np.random.rand(10)
     with pytest.raises(expected_error) as exc_info:
-        resampler = Resampler(ResamplingParams(
+        resampler = Resampler(ResamplerConfig(
             frac_samples=frac_samples, seed=seed))
         resampler.resample_data([array])
 
@@ -52,8 +52,8 @@ def test_failing_resample_data(frac_samples, seed, expected_error):
 @given(numpy_array=arrays(dtype=float, shape=st.integers(min_value=100, max_value=1000), elements=st.floats(allow_nan=False, allow_infinity=False)), frac_samples=st.floats(min_value=1/10, max_value=0.9))
 def test_different_seeds(numpy_array, frac_samples):
     x = y = np.array(numpy_array)
-    resampler1 = Resampler(ResamplingParams(frac_samples=frac_samples, seed=0))
-    resampler2 = Resampler(ResamplingParams(frac_samples=frac_samples, seed=1))
+    resampler1 = Resampler(ResamplerConfig(frac_samples=frac_samples, seed=0))
+    resampler2 = Resampler(ResamplerConfig(frac_samples=frac_samples, seed=1))
 
     if len(set(numpy_array)) == 1:
         with pytest.raises(ValueError, match="Resampling would be nonsensical when all arrays have only one unique element."):
@@ -73,7 +73,7 @@ def test_different_seeds(numpy_array, frac_samples):
 @given(numpy_array=st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=2, max_size=10), frac_samples=st.floats(min_value=0.1, max_value=1))
 def test_resample_frac_samples(numpy_array, frac_samples):
     x = y = np.array(numpy_array)
-    resampler = Resampler(ResamplingParams(frac_samples=frac_samples, seed=0))
+    resampler = Resampler(ResamplerConfig(frac_samples=frac_samples, seed=0))
 
     if len(np.unique(np.array(numpy_array))) == 1:
         with pytest.raises(ValueError, match="Resampling would be nonsensical when all arrays have only one unique element."):
@@ -105,7 +105,7 @@ def test_inconsistent_lengths():
     np.random.seed(0)
     array1 = np.random.rand(10)
     array2 = np.random.rand(9)
-    resampler = Resampler(ResamplingParams(frac_samples=0.5, seed=0))
+    resampler = Resampler(ResamplerConfig(frac_samples=0.5, seed=0))
 
     with pytest.raises(ValueError):
         resampler.resample_data([array1, array2])
@@ -116,7 +116,7 @@ def test_inconsistent_lengths():
 def test_resample_single_unique():
     array1 = np.array([1] * 10)
     array2 = np.array([2] * 10)
-    resampler = Resampler(ResamplingParams(frac_samples=0.5, seed=0))
+    resampler = Resampler(ResamplerConfig(frac_samples=0.5, seed=0))
 
     with pytest.raises(ValueError):
         resampler.resample_data([array1, array2])
@@ -127,7 +127,7 @@ def test_resample_single_unique():
 def test_resample_empty():
     array1 = np.array([])
     array2 = np.array([])
-    resampler = Resampler(ResamplingParams(frac_samples=0.5, seed=0))
+    resampler = Resampler(ResamplerConfig(frac_samples=0.5, seed=0))
 
     with pytest.raises(ValueError):
         resampler.resample_data([array1, array2])
@@ -136,8 +136,8 @@ def test_resample_empty():
 def test_randomness_of_resampling():
     np.random.seed(0)
     array = np.random.rand(10)
-    resampler1 = Resampler(ResamplingParams(frac_samples=0.5, seed=0))
-    resampler2 = Resampler(ResamplingParams(frac_samples=0.5, seed=1))
+    resampler1 = Resampler(ResamplerConfig(frac_samples=0.5, seed=0))
+    resampler2 = Resampler(ResamplerConfig(frac_samples=0.5, seed=1))
 
     # First run
     ib_array1, _, _, _ = resampler1.resample_data([array])
@@ -150,7 +150,7 @@ def test_randomness_of_resampling():
 def test_resampling_with_no_replacement():
     np.random.seed(0)
     array = np.random.rand(10)
-    resampler = Resampler(ResamplingParams(
+    resampler = Resampler(ResamplerConfig(
         frac_samples=0.5, seed=0, replace=False))
 
     # Resample data

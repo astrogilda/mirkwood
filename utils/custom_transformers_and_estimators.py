@@ -2,7 +2,7 @@
 from src.data_handler import GalaxyProperty
 from utils.weightify import Weightify
 from sklearn.pipeline import Pipeline
-from utils.validate import reshape_to_1d_array, reshape_to_2d_array
+from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 from typing import Any, List, Optional, Union, Tuple, Dict, Callable
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import FunctionTransformer, StandardScaler

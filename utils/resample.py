@@ -52,7 +52,7 @@ def _numba_resample_and_oob(idx: np.ndarray, frac_samples: float, seed: int, rep
     return resampled_idx, oob_idx
 
 
-class ResamplingParams(BaseModel):
+class ResamplerConfig(BaseModel):
     frac_samples: confloat(gt=0, le=1, strict=True) = Field(
         default=1, description='Fraction of samples to draw for resampling.')
     seed: conint(ge=0, lt=2**32) = Field(
@@ -61,11 +61,11 @@ class ResamplingParams(BaseModel):
 
 
 class Resampler:
-    def __init__(self, params: ResamplingParams):
+    def __init__(self, params: ResamplerConfig):
         self.params = params
-        if not isinstance(self.params, ResamplingParams):
+        if not isinstance(self.params, ResamplerConfig):
             raise ValueError(
-                f"Expected params to be a ResamplingParams, but got {type(self.params)}")
+                f"Expected params to be a ResamplingConfig, but got {type(self.params)}")
 
     def resample_data(self, arrays: List[np.ndarray]) -> Tuple[Tuple[np.ndarray, ...], Tuple[np.ndarray, ...], Tuple[np.ndarray, ...], Tuple[np.ndarray, ...]]:
         """

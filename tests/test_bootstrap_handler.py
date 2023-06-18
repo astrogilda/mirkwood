@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from src.model_handler import ModelHandler, ModelConfig
-from src.bootstrap_handler import BootstrapHandler
+from src.model_handler import ModelHandler, ModelHandlerConfig
+from src.bootstrap_handler import BootstrapHandler, BootstrapConfig
 from pydantic import ValidationError
 from numpy.testing import assert_array_equal
 from multiprocessing import Pool
@@ -11,56 +11,59 @@ from utils.metrics import ProbabilisticErrorMetrics, DeterministicErrorMetrics, 
 
 
 def generate_data(n_samples: int, n_features: int):
+    np.random.seed(0)  # Set seed for reproducibility
     X = np.random.rand(n_samples, n_features).astype(np.float64)
     y = np.random.rand(n_samples).astype(np.float64)
-    feature_names = [''.join(random.choices(string.ascii_letters + string.digits, k=10))
-                     for _ in range(n_features)]
+    feature_names = [f'feature{i}' for i in range(n_features)]
     return X, y, feature_names
 
 
 # ModelHandler for tests
 X_train, y_train, feature_names = generate_data(50, 20)
 X_val, y_val, _ = generate_data(30, 20)
-model_handler = ModelHandler(X_train=X_train, y_train=y_train,
-                             X_val=X_val, y_val=y_val, feature_names=feature_names)
+model_handler_config = ModelHandlerConfig(X_train=X_train, y_train=y_train,
+                                          X_val=X_val, y_val=y_val, feature_names=feature_names)
+model_handler = ModelHandler(model_handler_config)
 
 
-@pytest.mark.parametrize("frac_samples_best,expect_pass", [
+@pytest.mark.parametrize("frac_samples,expect_pass", [
     (0.8, True),
     (0.0, False),
     (1.0, True),
     (1.5, False),
     (-0.2, False)
 ])
-def test_BootstrapHandler_init(frac_samples_best, expect_pass):
+def test_BootstrapHandler_init(frac_samples, expect_pass):
+    config = BootstrapConfig(frac_samples=frac_samples)
     if expect_pass:
-        BootstrapHandler(model_handler=model_handler,
-                         frac_samples_best=frac_samples_best)
+        BootstrapHandler(model_handler=model_handler, bootstrap_config=config)
     else:
         with pytest.raises(ValidationError):
             BootstrapHandler(model_handler=model_handler,
-                             frac_samples_best=frac_samples_best)
+                             bootstrap_config=config)
 
 
-@pytest.mark.parametrize("frac_samples_best,X,y", [
+@pytest.mark.parametrize("frac_samples,X,y", [
     (0.8, np.random.rand(50, 20), np.random.rand(50)),
     (0.9, np.random.rand(100, 20), np.random.rand(100)),
     (1.0, np.random.rand(200, 20), np.random.rand(200)),
     (0.5, np.random.rand(400, 20), np.random.rand(400)),
 ])
-def test_bootstrap_func_mp_with_different_samples(frac_samples_best, X, y):
+def test_bootstrap_with_different_samples(frac_samples, X, y):
     feature_names = [''.join(random.choices(string.ascii_letters + string.digits, k=10))
                      for _ in range(20)]
-    model_handler = ModelHandler(
+    model_handler_config = ModelHandlerConfig(
         X_train=X, y_train=y, X_val=X, y_val=y, feature_names=feature_names)
+    model_handler = ModelHandler(model_handler_config)
+    bootstrap_config = BootstrapConfig(frac_samples=frac_samples)
     bootstrap_handler = BootstrapHandler(
-        model_handler=model_handler, frac_samples_best=frac_samples_best)
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
 
     y_test, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
         iteration_num=0)
 
     # Assert the shapes are consistent
-    assert_array_equal(y_test.ravel(), bootstrap_handler.model_handler.y_val)
+    assert_array_equal(y_test.ravel(), model_handler.y_val)
     assert y_pred_mean.shape == y_test.shape
     assert y_pred_std.shape == y_test.shape
     assert shap_values_mean.shape == y_test.shape
@@ -79,9 +82,10 @@ def test_bootstrap_func_mp_with_different_samples(frac_samples_best, X, y):
     ('a', False),
     (None, False)
 ])
-def test_bootstrap_func_mp_with_invalid_iteration_num(iteration_num, expect_pass):
+def test_bootstrap_with_invalid_iteration_num(iteration_num, expect_pass):
+    bootstrap_config = BootstrapConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
-        model_handler=model_handler, frac_samples_best=0.8)
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
 
     if expect_pass:
         bootstrap_handler.bootstrap_func_mp(iteration_num=iteration_num)
@@ -93,10 +97,12 @@ def test_bootstrap_func_mp_with_invalid_iteration_num(iteration_num, expect_pass
             bootstrap_handler.bootstrap_func_mp(iteration_num=iteration_num)
 
 
-def test_bootstrap_func_mp_metrics():
+def test_bootstrap_metrics():
     # Test that the metrics are calculated correctly
-    bootstrap_handler = BootstrapHandler(model_handler=model_handler)
-    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap_func_mp(
+    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap(
         iteration_num=0)
 
     confidence_level = 0.95
@@ -119,6 +125,105 @@ def test_bootstrap_func_mp_metrics():
     assert isinstance(probabilistic_error_metrics_handler.pinaw(), float)
     assert isinstance(
         probabilistic_error_metrics_handler.interval_sharpness(), float)
+
+
+def test_bootstrap_multiprocessing():
+    """Test BootstrapHandler bootstrap method in a multiprocessing context."""
+    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+
+    with Pool(processes=4) as pool:
+        results = pool.map(bootstrap_handler.bootstrap, range(4))
+
+    for result in results:
+        y_val, y_pred_mean, y_pred_std, shap_values_mean = result
+
+        assert y_val.shape == y_pred_mean.shape
+        assert y_pred_mean.shape == y_pred_std.shape
+        assert y_pred_std.shape == shap_values_mean.shape
+
+
+@pytest.mark.parametrize("frac_samples_best", [
+    ('a'),
+    (-1),
+    (2),
+])
+def test_bootstrap_invalid_frac_samples_best(frac_samples_best):
+    """Test BootstrapHandler initialization with invalid frac_samples_best."""
+    with pytest.raises((TypeError, ValueError)):
+        BootstrapConfig(frac_samples_best=frac_samples_best)
+
+
+@pytest.mark.parametrize("frac_samples_best", [0.0, 1.0])
+def test_bootstrap_edge_frac_samples_best(frac_samples_best):
+    """Test BootstrapHandler bootstrap method with edge values for frac_samples_best."""
+    bootstrap_config = BootstrapConfig(frac_samples_best=frac_samples_best)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap(
+        iteration_num=0)
+
+    assert y_val.shape == y_pred_mean.shape
+    assert y_pred_mean.shape == y_pred_std.shape
+    assert y_pred_std.shape == shap_values_mean.shape
+
+
+@pytest.mark.parametrize("iteration_num", [
+    ('a'),
+    (-1),
+])
+def test_bootstrap_invalid_iteration_num(iteration_num):
+    """Test BootstrapHandler bootstrap method with invalid iteration_num."""
+    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+
+    with pytest.raises((TypeError, ValueError)):
+        bootstrap_handler.bootstrap(iteration_num=iteration_num)
+
+
+@pytest.mark.parametrize("data", [
+    (np.ones((50, 20)), np.ones(50)),  # All ones
+    (np.full((50, 20), 2), np.full(50, 2)),  # All twos
+    (np.tile(np.arange(5), (50, 4)), np.tile(
+        np.arange(5), 10)),  # Repeat small range
+])
+def test_bootstrap_non_random_data(data):
+    """Test BootstrapHandler bootstrap method with non-random data."""
+    X_train, y_train = data
+    feature_names = [''.join(np.random.choice(list('abcdefghij'), size=10))
+                     for _ in range(20)]
+    model_handler_config = ModelHandlerConfig(X_train=X_train, y_train=y_train,
+                                              X_val=X_train, y_val=y_train, feature_names=feature_names)
+    model_handler = ModelHandler(model_handler_config=model_handler_config)
+    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+
+    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap(
+        iteration_num=0)
+
+    assert y_val.shape == y_pred_mean.shape
+    assert y_pred_mean.shape == y_pred_std.shape
+    assert y_pred_std.shape == shap_values_mean.shape
+
+
+def test_bootstrap_multiprocessing():
+    """Test BootstrapHandler bootstrap method in a multiprocessing context."""
+    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_handler = BootstrapHandler(
+        model_handler=model_handler, bootstrap_config=bootstrap_config)
+
+    with Pool(processes=4) as pool:
+        results = pool.map(bootstrap_handler.bootstrap, range(4))
+
+    for result in results:
+        y_val, y_pred_mean, y_pred_std, shap_values_mean = result
+
+        assert y_val.shape == y_pred_mean.shape
+        assert y_pred_mean.shape == y_pred_std.shape
+        assert y_pred_std.shape == shap_values_mean.shape
 
 
 '''
@@ -184,7 +289,7 @@ with Pool(num_bs_inner) as p:
     args = ((bootstrap_handler, j)
             for j in range(num_bs_inner))
     concat_output = p.starmap(
-        BootstrapHandler.bootstrap_func_mp, args)
+        BootstrapHandler.bootstrap, args)
 
         
 # first three elements are of shape (n, 1) and the fourth element is of shape (n, m)
