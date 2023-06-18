@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
     """
-    Validates a file path based on the fitting mode.
+    Validates a file path based on the fitting mode. 
+    If a directory doesn't exist in fitting mode, it will be created.
 
     Args:
         file_path: File path to validate.
@@ -23,9 +24,14 @@ def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
 
     if fitting_mode:
         if not file_path.parent.exists():
-            error_msg = f"The directory {file_path.parent} does not exist. Provide a valid path."
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            logger.warning(
+                f"The directory {file_path.parent} does not exist. Creating it now.")
+            try:
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(
+                    f"Error creating directory {file_path.parent}: {str(e)}")
+                raise e
     else:
         if not file_path.exists():
             error_msg = f"No file found at the path: {file_path}"
