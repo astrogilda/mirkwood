@@ -3,7 +3,7 @@ import numpy as np
 from numba import jit
 from pathlib import Path
 from sklearn.utils.validation import check_consistent_length
-from typing import Optional, Any
+from typing import Optional, Any, Type
 
 
 logger = logging.getLogger(__name__)
@@ -39,16 +39,23 @@ def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
             raise FileNotFoundError(error_msg)
 
 
-def validate_npndarray_input(**kwargs: Any) -> None:
+def validate_input(expected_type: Type, **kwargs: Any) -> None:
     """
     Validate the format and type of inputs.
     Args:
+        expected_type: The expected type of the inputs.
         **kwargs: Dictionary of input arguments.
     Raises:
         ValueError: If any of the inputs is not in the expected format or type.
     """
+    if not kwargs:
+        raise ValueError("No arguments were provided")
+
+    if not isinstance(expected_type, type):
+        raise ValueError("Expected type is not a type")
+
     for arg, value in kwargs.items():
-        if not isinstance(value, np.ndarray):
-            error_msg = f"Expected {arg} to be a numpy ndarray, but got {type(value)}"
+        if not isinstance(value, expected_type):
+            error_msg = f"Expected {arg} to be a {expected_type.__name__}, but got {type(value).__name__}"
             logger.error(error_msg)
             raise ValueError(error_msg)

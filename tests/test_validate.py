@@ -1,9 +1,8 @@
 import pytest
 from hypothesis import given, settings, strategies as st
 from pathlib import Path
-from utils.validate import validate_file_path, validate_npndarray_input
+from utils.validate import validate_file_path, validate_input
 import numpy as np
-import os
 import tempfile
 
 
@@ -61,18 +60,67 @@ def test_validate_file_path_existing_directory() -> None:
         validate_file_path(Path(temp_dir), fitting_mode)
 
 
-# Test cases for validate_npndarray_input
+# Test cases for validate_input
 valid_nparray = st.just(np.array([1, 2, 3]))
 invalid_nparray = st.sampled_from(["not_nparray", 42, [1, 2, 3]])
+valid_list = st.lists(st.integers())
+invalid_list = st.sampled_from([42, "not_a_list", np.array([1, 2, 3])])
 
 
-@pytest.mark.parametrize("arg_value_strategy", [valid_nparray, invalid_nparray])
+@pytest.mark.parametrize(
+    "expected_type,arg_value_strategy",
+    [
+        (np.ndarray, valid_nparray),
+        (np.ndarray, invalid_nparray),
+        (list, valid_list),
+        (list, invalid_list)
+    ]
+)
 @given(arg_value=st.data())
 @settings(deadline=None)
-def test_validate_npndarray_input(arg_value_strategy, arg_value) -> None:
+def test_validate_input(expected_type, arg_value_strategy, arg_value) -> None:
     arg = arg_value.draw(arg_value_strategy)
-    if isinstance(arg, np.ndarray):
-        validate_npndarray_input(arg=arg)
+    if isinstance(arg, expected_type):
+        validate_input(expected_type, arg=arg)
     else:
         with pytest.raises(ValueError):
-            validate_npndarray_input(arg=arg)
+            validate_input(expected_type, arg=arg)
+
+
+# Edge case when no argument is given
+def test_validate_input_no_arg() -> None:
+    with pytest.raises(ValueError, match="No arguments were provided"):
+        validate_input(np.ndarray)
+
+
+# Edge case when None is passed
+def test_validate_input_none_arg() -> None:
+    with pytest.raises(ValueError):
+        validate_input(np.ndarray, arg=None)
+
+
+# Edge case when an invalid type is provided as expected_type
+def test_validate_input_invalid_expected_type() -> None:
+    with pytest.raises(ValueError):
+        validate_input("not_a_type", arg=np.array([1, 2, 3]))
+
+
+# Edge case when multiple arguments are provided
+def test_validate_input_multiple_args() -> None:
+    arg1 = np.array([1, 2, 3])
+    arg2 = np.array([4, 5, 6])
+    validate_input(np.ndarray, arg1=arg1, arg2=arg2)
+
+    arg1 = [1, 2, 3]
+    arg2 = [4, 5, 6]
+    validate_input(list, arg1=arg1, arg2=arg2)
+
+    arg1 = np.array([1, 2, 3])
+    arg2 = [4, 5, 6]
+    with pytest.raises(ValueError):
+        validate_input(np.ndarray, arg1=arg1, arg2=arg2)
+
+    arg1 = [1, 2, 3]
+    arg2 = np.array([4, 5, 6])
+    with pytest.raises(ValueError):
+        validate_input(list, arg1=arg1, arg2=arg2)

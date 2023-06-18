@@ -40,8 +40,10 @@ class ModelHandlerConfig(BaseModel):
         default=GalaxyProperty.STELLAR_MASS)
     X_val: Optional[ndarray] = None
     y_val: Optional[ndarray] = None
-    weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    fitting_mode: bool = True
+    weight_flag: bool = Field(
+        False, description="Flag to indicate whether to use weights in the loss function")
+    fitting_mode: bool = Field(
+        True, description="Flag to indicate whether to fit the model or not")
     file_path: Optional[Path] = None
     shap_file_path: Optional[Path] = None
     shap_values_path: Optional[Path] = None
@@ -112,7 +114,7 @@ class ModelHandlerConfig(BaseModel):
         return value
 
 
-class ModelHandler(BaseModel):
+class ModelHandler:
     """
     A model handler for performing various tasks including data transformation,
     fitting/loading an estimator, and computing prediction bounds and SHAP values.
@@ -120,10 +122,10 @@ class ModelHandler(BaseModel):
 
     def __init__(self, config: ModelHandlerConfig) -> None:
 
+        self._config = config
         from src.estimator_handler import EstimatorHandler
         from src.shap_handler import ShapHandler
 
-        self._config = config
         self._estimator_handler = EstimatorHandler(config)
         self._shap_handler = ShapHandler(config)
 
