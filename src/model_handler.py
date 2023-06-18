@@ -10,7 +10,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 from typing import Any, Optional, Tuple, List
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
-from utils.validate import validate_npndarray_input
+from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
 from utils.custom_transformers_and_estimators import (
     ModelConfig, XTransformer, YTransformer, create_estimator,
@@ -161,7 +161,7 @@ class ModelHandler:
         Returns:
             Tuple of arrays: predicted target variable and uncertainty.
         """
-        validate_npndarray_input(X_test)
+        validate_input(np.ndarray, X_test)
         y_pred = self._predict_with_estimator(X_test)
         y_pred_mean, y_pred_std = PostProcessY.transform(
             y_pred, self._config.galaxy_property)
@@ -187,7 +187,7 @@ class ModelHandler:
         Returns:
             Array of SHAP values.
         """
-        validate_npndarray_input(X_test)
+        validate_input(np.ndarray, X_test)
         shap_pred = self._calculate_shap_values_with_explainer(X_test)
         return shap_pred
 
