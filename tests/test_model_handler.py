@@ -42,18 +42,11 @@ def test_fit(dummy_model_handler: ModelHandler):
 def test_predict(dummy_model_handler: ModelHandler, fit_before_predict):
     x_val = np.random.randn(10, len(FEATURE_NAMES))
 
-    if fit_before_predict:
-        dummy_model_handler.fit()
-
     if not fit_before_predict:
         with pytest.raises(NotFittedError):
             dummy_model_handler.predict(X_test=x_val)
     else:
-        results = dummy_model_handler.predict(X_test=x_val)
-        assert len(results) == 2
-        assert isinstance(results[0], np.ndarray)
-        assert results[1] is None
-
+        dummy_model_handler.fit()
         results = dummy_model_handler.predict(X_test=x_val)
         assert len(results) == 2
         assert isinstance(results[0], np.ndarray)

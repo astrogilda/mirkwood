@@ -58,4 +58,4 @@ def validate_input(expected_type: Type, **kwargs: Any) -> None:
         if not isinstance(value, expected_type):
             error_msg = f"Expected {arg} to be a {expected_type.__name__}, but got {type(value).__name__}"
             logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise TypeError(error_msg)

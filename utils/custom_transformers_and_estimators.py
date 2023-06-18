@@ -513,7 +513,7 @@ class PostProcessY(BaseEstimator, TransformerMixin):
         Union[np.ndarray, Tuple[np.ndarray]]
             Postprocessed data.
         """
-        if self.prop is None:
+        if self.prop is None or self.prop.value not in self.inverse_transforms.keys():
             return ys
         else:
             postprocessed_ys = [self._apply_inverse_transform(y) for y in ys]

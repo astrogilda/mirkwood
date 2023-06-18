@@ -161,10 +161,10 @@ class ModelHandler:
         Returns:
             Tuple of arrays: predicted target variable and uncertainty.
         """
-        validate_input(np.ndarray, X_test)
+        validate_input(np.ndarray, arg1=X_test)
         y_pred = self._predict_with_estimator(X_test)
-        y_pred_mean, y_pred_std = PostProcessY.transform(
-            y_pred, self._config.galaxy_property)
+        y_pred_mean, y_pred_std = PostProcessY(prop=self._config.galaxy_property).transform(
+            y_pred)
         return y_pred_mean, y_pred_std
 
     def create_explainer(self, X: Optional[ndarray] = None) -> None:
@@ -187,7 +187,7 @@ class ModelHandler:
         Returns:
             Array of SHAP values.
         """
-        validate_input(np.ndarray, X_test)
+        validate_input(np.ndarray, arg1=X_test)
         shap_pred = self._calculate_shap_values_with_explainer(X_test)
         return shap_pred
 
@@ -232,8 +232,7 @@ class ModelHandler:
         Returns:
             Tuple of arrays: converted predicted mean values and standard deviations.
         """
-        post_processor = PostProcessY(
-            self._config.galaxy_property, to_scale=False)
+        post_processor = PostProcessY(self._config.galaxy_property)
         return post_processor.transform(predicted_mean), post_processor.transform(predicted_std) if predicted_std is not None else None
 
 

@@ -83,7 +83,7 @@ def test_validate_input(expected_type, arg_value_strategy, arg_value) -> None:
     if isinstance(arg, expected_type):
         validate_input(expected_type, arg=arg)
     else:
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             validate_input(expected_type, arg=arg)
 
 
@@ -95,7 +95,7 @@ def test_validate_input_no_arg() -> None:
 
 # Edge case when None is passed
 def test_validate_input_none_arg() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         validate_input(np.ndarray, arg=None)
 
 
@@ -105,7 +105,7 @@ def test_validate_input_invalid_expected_type() -> None:
         validate_input("not_a_type", arg=np.array([1, 2, 3]))
 
 
-# Edge case when multiple arguments are provided
+# Edge case when multiple arguments of different types are provided
 def test_validate_input_multiple_args() -> None:
     arg1 = np.array([1, 2, 3])
     arg2 = np.array([4, 5, 6])
@@ -117,10 +117,10 @@ def test_validate_input_multiple_args() -> None:
 
     arg1 = np.array([1, 2, 3])
     arg2 = [4, 5, 6]
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         validate_input(np.ndarray, arg1=arg1, arg2=arg2)
 
     arg1 = [1, 2, 3]
     arg2 = np.array([4, 5, 6])
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         validate_input(list, arg1=arg1, arg2=arg2)
