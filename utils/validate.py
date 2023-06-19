@@ -59,3 +59,33 @@ def validate_input(expected_type: Type, **kwargs: Any) -> None:
             error_msg = f"Expected {arg} to be a {expected_type.__name__}, but got {type(value).__name__}"
             logger.error(error_msg)
             raise TypeError(error_msg)
+
+
+def is_estimator_fitted(estimator: Any) -> bool:
+    """
+    Generalized function to check if an estimator (or any object with a fit method)
+    has been fitted. This is based on the scikit-learn convention that fitted
+    estimators have attributes with trailing underscores.
+
+    Parameters
+    ----------
+    estimator: The estimator to check.
+
+    Returns
+    -------
+    bool: True if the estimator is fitted, False otherwise.
+    """
+    # common fitted attributes in scikit-learn
+    fitted_attr = [
+        "coef_", "intercept_", "classes_", "n_iter_", "n_features_in_",  # general attributes
+        "cluster_centers_", "labels_",  # clustering
+        "components_", "explained_variance_", "singular_values_",  # decomposition
+        "best_score_", "best_params_", "best_estimator_",  # model selection
+        "n_clusters_", "children_", "n_components_",  # miscellaneous
+        # tree based attributes
+        "feature_importances_", "oob_score_", "n_outputs_", "n_classes_",
+        "class_count_", "class_prior_", "n_features_",  # naive bayes
+        "theta_", "sigma_"  # gaussian naive bayes
+    ]
+
+    return any(hasattr(estimator, attr) for attr in fitted_attr)

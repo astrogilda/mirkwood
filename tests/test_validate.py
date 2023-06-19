@@ -1,9 +1,20 @@
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import GridSearchCV
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.datasets import make_classification
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LinearRegression
 import pytest
 from hypothesis import given, settings, strategies as st
 from pathlib import Path
-from utils.validate import validate_file_path, validate_input
+from utils.validate import validate_file_path, validate_input, is_estimator_fitted
 import numpy as np
 import tempfile
+from pydantic import BaseModel, ValidationError
 
 
 @pytest.mark.parametrize("fitting_mode", [True, False])
@@ -124,3 +135,69 @@ def test_validate_input_multiple_args() -> None:
     arg2 = np.array([4, 5, 6])
     with pytest.raises(TypeError):
         validate_input(list, arg1=arg1, arg2=arg2)
+
+
+# Hypothesis strategy to generate both fitted and unfitted models
+@given(st.integers(min_value=0, max_value=2**32-1), st.booleans())
+def test_is_estimator_fitted(random_state, is_fitted):
+    # Generate data for fitting
+    X, y = make_classification(n_samples=100, n_features=20)
+
+    # Create models
+    models = [LinearRegression(), SVC(), RandomForestClassifier(
+        random_state=random_state)]
+    model = models[random_state % len(models)]
+
+    # Train or create unfitted model based on the test case
+    if is_fitted:
+        model.fit(X, y)
+
+    # Use your utility function
+    result = is_estimator_fitted(model)
+
+    # Assert result matches expectation
+    assert result == is_fitted, f"Expected {is_fitted}, but got {result}"
+
+
+# Unfitted models
+@given(st.randoms())
+def test_unfitted_models(random_generator):
+    models = [LinearRegression(), SVC(), RandomForestClassifier(
+        random_state=random_generator)]
+    model = models[random_generator.randint(0, len(models)-1)]
+
+    assert not is_estimator_fitted(
+        model), f"{model} should be considered unfitted, but isn't."
+
+
+# Test model not following sklearn API
+class NotSklearnAPIModel:
+    def fit(self, X, y):
+        self.coef_ = 42
+        return self
+
+
+def test_not_sklearn_model():
+    model = NotSklearnAPIModel().fit([1, 2, 3], [1, 2, 3])
+    assert is_estimator_fitted(
+        model), "Model not following sklearn API should still be considered as fitted."
+
+
+# Test various types of fitted models
+def test_various_fitted_models():
+    X, y = make_classification(n_samples=100, n_features=20)
+    models = [LinearRegression(), SVC(), RandomForestClassifier(), PCA(), KMeans(), GridSearchCV(
+        estimator=SVC(), param_grid={'C': [1, 10]}), GaussianNB(), GradientBoostingRegressor(), DecisionTreeClassifier()]
+    for model in models:
+        model.fit(X, y)
+        assert is_estimator_fitted(
+            model), f"Fitted {model} should be considered fitted, but isn't."
+
+
+# Test various types of unfitted models
+def test_various_unfitted_models():
+    models = [LinearRegression(), SVC(), RandomForestClassifier(), PCA(), KMeans(), GridSearchCV(
+        estimator=SVC(), param_grid={'C': [1, 10]}), GaussianNB(), GradientBoostingRegressor(), DecisionTreeClassifier()]
+    for model in models:
+        assert not is_estimator_fitted(
+            model), f"Unfitted {model} should be considered unfitted, but isn't."
