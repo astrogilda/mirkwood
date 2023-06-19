@@ -1,4 +1,6 @@
 
+from numpy import ndarray as np_ndarray
+from sklearn.base import BaseEstimator, RegressorMixin
 from src.data_handler import GalaxyProperty
 from utils.weightify import Weightify
 from sklearn.pipeline import Pipeline
@@ -270,15 +272,20 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         return self
 
 
-class CustomNGBRegressor(NGBRegressor):
-    def __init__(self, config: ModelConfig, *args, **kwargs):
-        super().__init__(Base=config.Base, Dist=config.Dist, Score=config.Score,
-                         n_estimators=config.n_estimators, learning_rate=config.learning_rate,
-                         col_sample=config.col_sample, minibatch_frac=config.minibatch_frac,
-                         verbose=config.verbose, natural_gradient=config.natural_gradient,
-                         early_stopping_rounds=config.early_stopping_rounds, *args, **kwargs)
+class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
+    def __init__(self, config=None, *args, **kwargs):
+        self.config = None
+        super().__init__(*args, **kwargs)
+        self.fitted_ = False
 
-    def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
+    def fit(self, X: np_ndarray, y: np_ndarray, config: ModelConfig, *args, **kwargs):
+        """Fits the CustomNGBRegressor."""
+        self.config = config
+        self.set_params(Base=config.Base, Dist=config.Dist, Score=config.Score,
+                        n_estimators=config.n_estimators, learning_rate=config.learning_rate,
+                        col_sample=config.col_sample, minibatch_frac=config.minibatch_frac,
+                        verbose=config.verbose, natural_gradient=config.natural_gradient,
+                        early_stopping_rounds=config.early_stopping_rounds, *args, **kwargs)
         logger.info('Fitting CustomNGBRegressor.')
         X, y = check_X_y(X, y, accept_sparse=True,
                          force_all_finite='allow-nan')
@@ -287,7 +294,8 @@ class CustomNGBRegressor(NGBRegressor):
         logger.info('CustomNGBRegressor fitted.')
         return self
 
-    def predict_dist(self, X: np.ndarray):
+    def predict_dist(self, X: np_ndarray):
+        """Predicts the distribution using the fitted model."""
         logger.info('Predicting distribution using CustomNGBRegressor.')
         check_is_fitted(self, "fitted_")
         X = check_array(X, accept_sparse=True, force_all_finite='allow-nan')
@@ -295,17 +303,41 @@ class CustomNGBRegressor(NGBRegressor):
         logger.info('Prediction of distribution completed.')
         return y_pred_dist
 
-    def predict(self, X: np.ndarray):
+    def predict(self, X: np_ndarray):
+        """Predicts using the fitted model."""
         logger.info('Predicting using CustomNGBRegressor.')
         y_pred_mean = self.predict_dist(X=X).loc
         logger.info('Prediction completed.')
         return y_pred_mean
 
-    def predict_std(self, X: np.ndarray):
+    def predict_std(self, X: np_ndarray):
+        """Predicts the standard deviation using the fitted model."""
         logger.info('Predicting standard deviation using CustomNGBRegressor.')
         y_pred_std = self.predict_dist(X=X).scale
         logger.info('Prediction of standard deviation completed.')
         return y_pred_std
+
+    def get_params(self, deep=True):
+        """Gets the parameters of the model.
+
+        Args:
+            deep (bool): Whether to recursively get the parameters.
+
+        Returns:
+            params (dict): The parameters of the model.
+        """
+        params = super().get_params(deep=deep)
+        params.update({"config": self.config})
+        return params
+
+    def set_params(self, **params):
+        """Sets the parameters of the model.
+
+        Args:
+            params (dict): The parameters to set.
+        """
+        self.config = params.pop('config', self.config)
+        return super().set_params(**params)
 
     @property
     def base_model(self):
@@ -454,6 +486,8 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         logger.info('Prediction of standard deviation completed.')
         return reshape_to_1d_array(y_pred_std_inverse)
 
+
+# TODO: use validate.validate_input instead of validate_instance below
 
 def create_estimator(model_config: Optional[ModelConfig] = None,
                      X_transformer: Optional[XTransformer] = None,

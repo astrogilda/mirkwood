@@ -31,7 +31,8 @@ def reshape_to_1d_array(array: np.ndarray) -> np.ndarray:
         raise ValueError("Input array must not be empty.")
 
     if array.ndim > 2 or (array.ndim == 2 and array.shape[1] != 1):
-        raise ValueError("Input array must have shape (n,) or (n, 1).")
+        raise ValueError(
+            f"Input array must have shape (n,) or (n, 1), but has shape {array.shape}")
 
     if array.ndim == 1:
         return array
@@ -44,7 +45,8 @@ def reshape_to_2d_array(array: np.ndarray) -> np.ndarray:
         raise ValueError("Input array must not be empty.")
 
     if array.ndim > 2 or (array.ndim == 2 and array.shape[1] != 1):
-        raise ValueError("Input array must have shape (n,) or (n, 1).")
+        raise ValueError(
+            f"Input array must have shape (n,) or (n, 1), but has shape {array.shape}")
 
     if array.ndim == 2:
         return array

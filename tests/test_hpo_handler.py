@@ -30,10 +30,10 @@ def test_hpo_handler_fit_and_predict_and_predict_std(n_trials):
     """
     X_train, X_val, y_train, y_val, param_grid, cv = common_setup()
 
-    params = HPOHandlerConfig(
+    config = HPOHandlerConfig(
         param_grid=param_grid, n_trials=n_trials, loss=crps_scorer, cv=cv, timeout=5*60)
 
-    hpo = HPOHandler(params=params)
+    hpo = HPOHandler(config=config)
     try:
         hpo.fit(X_train, y_train)
     except ValueError:

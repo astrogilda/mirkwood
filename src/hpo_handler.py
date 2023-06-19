@@ -1,3 +1,4 @@
+from sklearn.base import clone
 from pydantic import BaseModel, Field, ValidationError
 from optuna import Study
 from typing import Union
@@ -10,6 +11,10 @@ from typing import Callable, List, Optional, Tuple, Union
 from src.model_handler import ModelConfig
 from utils.custom_transformers_and_estimators import XTransformer, YTransformer, CustomTransformedTargetRegressor, create_estimator
 from utils.metrics import ProbabilisticErrorMetrics
+
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # TODO: add option for loss to be None, which necessitates that the estimator has a score method. ie add such a method in custom_estimators_and_transformers.py
 # TODO: add limits for the distributions in ParamGridConfig
@@ -55,10 +60,9 @@ class HPOHandlerConfig(BaseModel):
     n_jobs: Optional[int] = Field(
         default=-1, ge=-1, description="Number of jobs to run in parallel")
     loss: Optional[Callable] = Field(
-        crps_scorer, description="Loss function to optimize")
-    estimator: CustomTransformedTargetRegressor = Field(
-        default=create_estimator(model_config=ModelConfig(
-        ), X_transformer=XTransformer(), y_transformer=YTransformer()),
+        None, description="Loss function to optimize")
+    estimator: Optional[CustomTransformedTargetRegressor] = Field(
+        default=None,
         description="Estimator to be used for hyperparameter optimization"
     )
     cv: List[Tuple[np.ndarray, np.ndarray]
@@ -75,16 +79,33 @@ class HPOHandlerConfig(BaseModel):
             raise ValueError('n_jobs cannot be 0')
         return v
 
+    @validator('estimator', pre=True, always=True)
+    def set_default_estimator(cls, v):
+        return v or create_estimator(model_config=ModelConfig(), X_transformer=XTransformer(), y_transformer=YTransformer())
 
-class HPOHandler(BaseModel):
+    @validator('loss', pre=True, always=True)
+    def set_default_loss(cls, v):
+        return v or crps_scorer
+
+
+class HPOHandler:
     """
     Handler for hyperparameter optimization.
     """
-    params: HPOHandlerConfig = Field(...,
-                                     description="Parameters of HPOHandler")
-    # Do not use this directly, use is_model_fitted instead
-    best_trial: Optional[Trial] = None
-    weight_flag: bool = False
+
+    def __init__(self, config: HPOHandlerConfig, best_trial: Optional[Trial] = None, weight_flag: bool = False):
+        if not isinstance(config, HPOHandlerConfig):
+            raise ValueError(
+                f"config must be of type HPOHandlerConfig, got {type(config)} instead")
+        if not isinstance(best_trial, (Trial, type(None))):
+            raise ValueError(
+                f"best_trial must be of type Trial or None, got {type(best_trial)} instead")
+        if not isinstance(weight_flag, bool):
+            raise ValueError(
+                f"weight_flag must be of type bool, got {type(weight_flag)} instead")
+        self.best_trial = best_trial
+        self.weight_flag = weight_flag
+        self.config = config
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -95,12 +116,21 @@ class HPOHandler(BaseModel):
             raise ValueError("You must call fit() before predict()")
         return True
 
+    def train_model(self, params: dict, X_train: np.ndarray, y_train: np.ndarray, weight_flag: bool) -> CustomTransformedTargetRegressor:
+        """
+        Creates a new instance of the estimator, sets its parameters, fits it and returns it.
+        """
+        model = clone(self.config.estimator)
+        model.set_params(**params)
+        model.fit(X_train, y_train, weight_flag=weight_flag)
+        return model
+
     def objective(self, trial: Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
         """
         Objective function for Optuna hyperparameter optimization.
         """
         # get parameter ranges from param_grid
-        param_grid = self.params.param_grid.dict()
+        param_grid = self.config.param_grid.dict()
 
         params = {}
         for key, distribution in param_grid.items():
@@ -113,11 +143,11 @@ class HPOHandler(BaseModel):
             else:
                 raise ValueError(f"Unsupported distribution: {distribution}")
 
-        # update parameters of the entire CustomTransformedTargetRegressor pipeline
-        pipeline = self.params.estimator.set_params(**params)
+        # Clone and fit a new pipeline for this trial
+        pipeline = self.train_model(params, X_train, y_train, self.weight_flag)
 
         scores = []
-        for train_index, val_index in self.params.cv:
+        for train_index, val_index in self.config.cv:
             X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
             y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
 
@@ -128,8 +158,8 @@ class HPOHandler(BaseModel):
             y_val_fold_pred_std = pipeline.predict_std(
                 X_val_fold)
 
-            score = self.params.loss(y_true=y_val_fold, y_pred_mean=y_val_fold_pred_mean,
-                                     y_pred_std=y_val_fold_pred_std, z_score=self.params.z_score)
+            score = self.config.loss(y_true=y_val_fold, y_pred_mean=y_val_fold_pred_mean,
+                                     y_pred_std=y_val_fold_pred_std, z_score=self.config.z_score)
             scores.append(score)
 
         return np.mean(scores)
@@ -139,32 +169,37 @@ class HPOHandler(BaseModel):
         Predict the target variable for the given data.
         """
         if self.is_model_fitted:
-            return self.params.estimator.predict(X)
+            return self.config.estimator.predict(X)
 
     def predict_std(self, X: np.ndarray) -> np.ndarray:
         """
         Predict the standard deviation of the target variable for the given data.
         """
         if self.is_model_fitted:
-            return self.params.estimator.predict_std(X)
+            return self.config.estimator.predict_std(X)
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """
         Fit the pipeline to the training data.
         """
-        study = optuna.create_study(direction='maximize')
-        study.optimize(lambda trial: self.objective(trial, X_train, y_train),
-                       n_trials=self.params.n_trials, timeout=self.params.timeout, n_jobs=self.params.n_jobs)
-
         try:
+            study = optuna.create_study(direction='maximize')
+            study.optimize(lambda trial: self.objective(trial, X_train, y_train),
+                           n_trials=self.config.n_trials, timeout=self.config.timeout, n_jobs=self.config.n_jobs)
+
             self.best_trial = study.best_trial
-        except ValueError as e:
-            raise ValueError("No trials are completed yet.") from e
 
-        # Extract only the parameters that exist in the estimator
-        best_params = {param: value for param, value in self.best_trial.params.items()
-                       if param in self.params.estimator.get_params().keys()}
+            # Extract only the parameters that exist in the estimator
+            best_params = {param: value for param, value in self.best_trial.config.items()
+                           if param in self.config.estimator.get_params().keys()}
 
-        self.params.estimator.set_params(**best_params)
-        self.params.estimator.fit(
-            X_train, y_train, weight_flag=self.weight_flag)
+            # Use the new train_model method to fit the final model
+            self.config.estimator = self.train_model(
+                best_params, X_train, y_train, self.weight_flag)
+
+        except Exception as e:
+            # This will log any exception that is thrown during the fit process.
+            # Make sure to import logging at the start of your file.
+            logger.error(
+                "An error occurred during the fit process:", exc_info=True)
+            raise
