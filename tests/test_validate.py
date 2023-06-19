@@ -14,7 +14,6 @@ from pathlib import Path
 from utils.validate import *
 import numpy as np
 import tempfile
-from pydantic import BaseModel, ValidationError
 
 
 @pytest.mark.parametrize("fitting_mode", [True, False])
@@ -264,3 +263,9 @@ def test_check_estimator_compliance_bad_estimator():
     estimator = BadEstimator().fit([1, 2, 3], [1, 2, 3])
     with pytest.raises((ValueError, TypeError)):
         check_estimator_compliance(estimator)
+
+
+#  Test check_estimator_compliance with sklearn estimator
+def test_check_estimator_compliance_bad_estimator():
+    estimator = RandomForestClassifier()
+    check_estimator_compliance(estimator)

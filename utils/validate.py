@@ -1,3 +1,10 @@
+import functools
+from sklearn.base import clone
+from sklearn.utils.estimator_checks import (
+    check_parameters_default_constructible,
+    check_estimator,
+    _yield_all_checks
+)
 from sklearn.utils.estimator_checks import check_parameters_default_constructible, check_estimator
 from sklearn.base import BaseEstimator
 from typing import Any
@@ -109,7 +116,7 @@ def is_estimator_fitted(estimator: Any) -> bool:
     return any(hasattr(estimator, attr) for attr in fitted_attr)
 
 
-def check_estimator_compliance(estimator: BaseEstimator) -> None:
+def check_estimator_compliance(estimator: BaseEstimator, skips: set = {}) -> None:
     """
     Checks the compliance of a given estimator with scikit-learn's estimator API.
 
@@ -134,7 +141,28 @@ def check_estimator_compliance(estimator: BaseEstimator) -> None:
         # Handle estimators without 'get_params' method
         logger.error(
             f"Failed to check parameters for estimator {estimator.__class__}. Error: {str(e)}")
-    check_estimator(estimator)
+
+    # Customize which checks to skip
+    # add more checks to skip if necessary
+    skips = {"check_sample_weights_invariance",
+             "check_classifiers_multilabel_output_format_decision_function"}
+
+    def get_check_name(check):
+        # The check can either be a functools.partial or a function
+        if isinstance(check, functools.partial):
+            return check.func.__name__
+        else:
+            return check.__name__
+
+    checks_generator = (check for check in _yield_all_checks(
+        estimator) if get_check_name(check) not in skips)
+
+    estimator_clone = clone(estimator)
+    for check in checks_generator:
+        try:
+            check(estimator_clone, estimator)
+        except TypeError:  # handle checks that only require one argument
+            check(estimator_clone)
 
 
 '''

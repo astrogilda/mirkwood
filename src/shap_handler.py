@@ -30,8 +30,11 @@ class ShapHandler:
             NotFittedError: If the explainer has not been created.
         """
         if self._explainer is None:
-            raise NotFittedError(
-                "SHAP Explainer is not created. Use calculate() to create it.")
+            if self._config.precreated_explainer is not None:
+                self._explainer = self._config.precreated_explainer
+            else:
+                raise NotFittedError(
+                    "SHAP Explainer is not created. Use calculate() to create it.")
         return self._explainer
 
     @explainer.setter
@@ -96,6 +99,10 @@ class ShapHandler:
         """
         Save the explainer to a file specified by file_path.
         """
+        if self._explainer is None:
+            raise NotFittedError(
+                "SHAP Explainer is not created. Use calculate() to create it.")
+
         if self._config.shap_file_path is not None:
             try:
                 dump(self.explainer, self._config.shap_file_path)

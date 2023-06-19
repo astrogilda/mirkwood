@@ -30,8 +30,11 @@ class EstimatorHandler:
             NotFittedError: If the estimator has not been created.
         """
         if self._estimator is None:
-            raise NotFittedError(
-                "Estimator is not created. Use fit() to create it.")
+            if self._config.precreated_estimator is not None:
+                self._estimator = self._config.precreated_estimator
+            else:
+                raise NotFittedError(
+                    "Estimator is not created. Use fit() to create it.")
         return self._estimator
 
     @estimator.setter
