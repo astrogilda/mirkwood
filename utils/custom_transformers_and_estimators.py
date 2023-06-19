@@ -9,14 +9,15 @@ from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from pydantic import BaseModel, Field, validator, root_validator, conint, confloat
 from ngboost.scores import LogScore, Score
 from ngboost.distns import Normal, Distn
-from sklearn.utils.validation import check_is_fitted
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 from ngboost import NGBRegressor
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 from sklearn.compose import TransformedTargetRegressor
 from copy import deepcopy
 import logging
+from utils.validate import validate_input
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -202,25 +203,28 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(self, y_transformer: YTransformer):
         logger.info('Initializing _MultipleTransformer.')
-        if not isinstance(y_transformer, YTransformer):
-            raise ValueError(
-                f"y_transformer should be an instance of YTransformer, but got {type(y_transformer)}")
+        validate_input(YTransformer, arg=y_transformer)
         self.y_transformer = y_transformer
-        self._transformers = []
-        self._is_fitted = False
+        # self._transformers = []
+        # self._is_fitted = False
         logger.info('_MultipleTransformer initialized.')
 
     def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None, sanity_check: bool = False) -> "_MultipleTransformer":
         """Fit all transformers using X"""
         logger.info('Fitting all transformers in _MultipleTransformer.')
-        X = reshape_to_2d_array(X)
-        X_copy = deepcopy(X)
+        # X = reshape_to_2d_array(X)
+        # X_copy = deepcopy(X)
+        if y is None:
+            X = check_array(X, accept_sparse=True,
+                            force_all_finite='allow-nan', ensure_2d=False)
+        else:
+            X, y = check_X_y(X, y, accept_sparse=True,
+                             force_all_finite='allow-nan', multi_output=True)
+        self.transformers_ = []
         for transformer in self.y_transformer.transformers:
-            new_transformer = deepcopy(transformer.transformer)
-            new_transformer = apply_transform_with_checks(
-                transformer=new_transformer, method_name='fit', X=X_copy, y=y, sanity_check=sanity_check)
-            self._transformers.append(new_transformer)
-        self._is_fitted = True
+            fitted_transformer = apply_transform_with_checks(
+                transformer=clone(transformer.transformer), method_name='fit', X=reshape_to_2d_array(X), y=y, sanity_check=sanity_check)
+            self.transformers_.append(fitted_transformer)
         logger.info('All transformers in _MultipleTransformer fitted.')
         return self
 
@@ -228,29 +232,29 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         """Transform X using all transformers."""
         logger.info(
             'Transforming data using all transformers in _MultipleTransformer.')
-        check_is_fitted(self, ["_is_fitted"])
-        X = reshape_to_2d_array(X)
-        X_copy = deepcopy(X)
-        for transformer in self._transformers:
-            X_copy = apply_transform_with_checks(
-                transformer=transformer, method_name='transform', X=X_copy, sanity_check=sanity_check)
+        check_is_fitted(self, "transformers_")
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite='allow-nan', ensure_2d=False)
+        for transformer in self.transformers_:
+            X = apply_transform_with_checks(
+                transformer=transformer, method_name='transform', X=reshape_to_2d_array(X), sanity_check=sanity_check)
         logger.info(
             'Data transformation using all transformers in _MultipleTransformer completed.')
-        return X_copy
+        return X
 
     def inverse_transform(self, X: np.ndarray, sanity_check: bool = False) -> np.ndarray:
         """Inverse transform X using all transformers."""
         logger.info(
             'Applying inverse transformation using all transformers in _MultipleTransformer.')
-        check_is_fitted(self, ["_is_fitted"])
-        X = reshape_to_2d_array(X)
-        X_copy = deepcopy(X)
-        for transformer in reversed(self._transformers):
-            X_copy = apply_transform_with_checks(
-                transformer=transformer, method_name='inverse_transform', X=X_copy, sanity_check=sanity_check)
+        check_is_fitted(self, "transformers_")
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite='allow-nan', ensure_2d=False)
+        for transformer in reversed(self.transformers_):
+            X = apply_transform_with_checks(
+                transformer=transformer, method_name='inverse_transform', X=X, sanity_check=sanity_check)
         logger.info(
             'Inverse transformation using all transformers in _MultipleTransformer completed.')
-        return X_copy
+        return X
 
     def get_params(self, deep=True):
         """Get parameters for this estimator."""
@@ -276,12 +280,17 @@ class CustomNGBRegressor(NGBRegressor):
 
     def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
         logger.info('Fitting CustomNGBRegressor.')
+        X, y = check_X_y(X, y, accept_sparse=True,
+                         force_all_finite='allow-nan')
         super().fit(X, y, **kwargs)
+        self.fitted_ = True
         logger.info('CustomNGBRegressor fitted.')
         return self
 
     def predict_dist(self, X: np.ndarray):
         logger.info('Predicting distribution using CustomNGBRegressor.')
+        check_is_fitted(self, "fitted_")
+        X = check_array(X, accept_sparse=True, force_all_finite='allow-nan')
         y_pred_dist = super().pred_dist(X)
         logger.info('Prediction of distribution completed.')
         return y_pred_dist
@@ -314,11 +323,25 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         Calculate weights for training and validation.
         """
         logger.info('Calculating weights for training and validation.')
+        y_train = check_array(y_train, accept_sparse=True,
+                              force_all_finite='allow-nan', ensure_2d=False)
+        if y_val is not None:
+            y_val = check_array(y_val, accept_sparse=True,
+                                force_all_finite='allow-nan', ensure_2d=False)
         weightifier = Weightify()
-        train_weights = weightifier.fit_transform(
-            y_train) if weight_flag else np.ones_like(y_train)
-        val_weights = weightifier.transform(
-            y_val) if weight_flag and y_val is not None else None
+        if weight_flag:
+            fitted_weightifier, train_weights = apply_transform_with_checks(
+                transformer=weightifier, method_name='fit_transform', X=reshape_to_1d_array(y_train))
+            if y_val is not None:
+                val_weights = apply_transform_with_checks(
+                    transformer=fitted_weightifier, method_name='transform', X=reshape_to_1d_array(y_val))
+            else:
+                val_weights = None
+        else:
+            train_weights = np.ones_like(y_train)
+            val_weights = np.ones_like(y_val) if y_val is not None else None
+        # train_weights = weightifier.fit_transform(y_train) if weight_flag else np.ones_like(y_train)
+        # val_weights = weightifier.transform(y_val) if weight_flag and y_val is not None else None
         logger.info('Weight calculation completed.')
         return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights) if val_weights is not None else None
 

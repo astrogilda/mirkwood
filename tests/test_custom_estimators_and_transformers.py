@@ -206,19 +206,21 @@ def test_ytransformer_failing():
 def test_multiple_transformer_wrong_input():
     """Test MultipleTransformer's response to invalid input -- single transformer"""
     # This should raise a TypeError because MultipleTransformer expects instances of YTransformer
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         _MultipleTransformer([StandardScaler(
         ), f"y_transformer should be an instance of YTransformer, but got {type(StandardScaler()).__name__}"])
-    with pytest.raises(ValueError):
-        _MultipleTransformer([
-            TransformerConfig(name="standard_scaler", transformer=StandardScaler()), f"y_transformer should be an instance of YTransformer, but got {type(TransformerConfig()).__name__}"])
+    with pytest.raises(TypeError):
+        transformer = TransformerConfig(
+            name="standard_scaler", transformer=StandardScaler())
+        _MultipleTransformer(
+            [transformer, f"y_transformer should be an instance of YTransformer, but got {type(transformer).__name__}"])
 
 
 def test_multiple_transformer_wrong_input_list():
     """Test MultipleTransformer's response to invalid input -- list of transformers"""
     stand_scaler = StandardScaler()
     func_trans = FunctionTransformer(np.log1p)
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         _MultipleTransformer([
             stand_scaler,
             func_trans
@@ -308,7 +310,7 @@ def test_create_estimator_invalid():
 
 @given(array_1d_and_2d())
 @settings(
-    deadline=None, max_examples=5
+    deadline=None, max_examples=10
 )
 def test_custom_transformed_target_regressor(arrays):
     """Test fitting, transforming and predicting of the CustomTransformedTargetRegressor class"""
@@ -321,7 +323,8 @@ def test_custom_transformed_target_regressor(arrays):
 
     # Instantiate transformers
     X_transformer = XTransformer()
-    y_transformer = YTransformer()
+    y_transformer = YTransformer(transformers=[TransformerConfig(
+        name="robust_scaler", transformer=RobustScaler())])
     model_config = ModelConfig()
 
     # Instantiate the regressor
@@ -339,13 +342,17 @@ def test_custom_transformed_target_regressor(arrays):
 
     # Fit and make predictions
     ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val, sanity_check=True)
-    y_pred = ttr.predict(X)
+    y_pred = ttr.predict(X_val)
 
     # Fit the base regressor for comparison
     ngb.fit(X_train, y_train)
-    y_pred_base = ngb.predict(X)
+    y_pred_base = ngb.predict(X_val)
 
     # Predictions made by CustomTransformedTargetRegressor should be similar to those made by the base estimator
+    print(f"y: {y}")
+    print(f"y_pred: {y_pred}")
+    print(f"y_pred_base: {y_pred_base}")
+    print("\n")
     assert np.allclose(y_pred, y_pred_base, rtol=.05)
 
 

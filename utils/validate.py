@@ -1,3 +1,9 @@
+from sklearn.utils.estimator_checks import check_parameters_default_constructible, check_estimator
+from sklearn.base import BaseEstimator
+from typing import Any
+from sklearn.utils import all_estimators
+from sklearn.utils.estimator_checks import check_estimator
+from sklearn.utils.estimator_checks import check_parameters_default_constructible
 import logging
 import numpy as np
 from numba import jit
@@ -49,7 +55,7 @@ def validate_input(expected_type: Type, **kwargs: Any) -> None:
         ValueError: If any of the inputs is not in the expected format or type.
     """
     if not kwargs:
-        raise ValueError("No arguments were provided")
+        raise TypeError("No arguments were provided")
 
     if not isinstance(expected_type, type):
         raise ValueError("Expected type is not a type")
@@ -82,10 +88,49 @@ def is_estimator_fitted(estimator: Any) -> bool:
         "components_", "explained_variance_", "singular_values_",  # decomposition
         "best_score_", "best_params_", "best_estimator_",  # model selection
         "n_clusters_", "children_", "n_components_",  # miscellaneous
-        # tree based attributes
         "feature_importances_", "oob_score_", "n_outputs_", "n_classes_",
         "class_count_", "class_prior_", "n_features_",  # naive bayes
-        "theta_", "sigma_"  # gaussian naive bayes
+        "theta_", "sigma_",  # gaussian naive bayes
+        "fitted_", "is_fitted_",  # CustomNGBRegressor
+        "transformers_", "n_features_in_", "n_features_out_",  # transformers
+        "n_samples_seen_", "scale_", "var_", "mean_",  # scalers
+        "n_features_", "n_outputs_", "n_input_features_",  # feature selectors
+        "n_neighbors_", "effective_metric_", "effective_metric_params_",  # neighbors
+        "n_trees_", "n_features_", "n_outputs_", "n_classes_",  # ensemble
+        "n_features_in_", "n_features_out_", "n_components_",  # feature extraction
+        "n_features_", "n_outputs_", "n_classes_", "n_layers_",  # neural network
+
     ]
 
     return any(hasattr(estimator, attr) for attr in fitted_attr)
+
+
+def check_estimator_compliance(estimator: BaseEstimator) -> None:
+    """
+    Checks the compliance of a given estimator with scikit-learn's estimator API.
+
+    The function first checks whether the estimator's parameters can be set to their default values.
+    It then checks if the estimator adheres to scikit-learn's API.
+
+    If the estimator doesn't pass the checks, an AssertionError is raised, indicating the reason for the failure.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        An instance of the estimator that is to be validated. 
+
+    Raises
+    ------
+    AssertionError
+        If the given estimator doesn't adhere to scikit-learn's estimator API.
+    """
+    check_parameters_default_constructible(estimator)
+    check_estimator(estimator)
+
+
+'''
+def check_all_estimators():
+    estimators = all_estimators()
+    for name, Estimator in estimators:
+        yield check_estimator_compliance(Estimator)
+'''

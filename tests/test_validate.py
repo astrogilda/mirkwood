@@ -100,7 +100,7 @@ def test_validate_input(expected_type, arg_value_strategy, arg_value) -> None:
 
 # Edge case when no argument is given
 def test_validate_input_no_arg() -> None:
-    with pytest.raises(ValueError, match="No arguments were provided"):
+    with pytest.raises(TypeError, match="No arguments were provided"):
         validate_input(np.ndarray)
 
 

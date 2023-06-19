@@ -96,8 +96,8 @@ def test_create_explainer(dummy_model_handler: ModelHandler, fit_before_create_e
         dummy_model_handler.create_explainer()
         assert dummy_model_handler.explainer is not None
 
-# ModelHandlerConfig tests
 
+# ModelHandlerConfig tests
 
 def test_empty_X_train():
     X = np.array([[], [], []])
