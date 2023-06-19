@@ -19,56 +19,72 @@ class BootstrapConfig(BaseModel):
     ----------
     frac_samples : float
         Maximum fraction of samples to draw, defaults to 1.0 (meaning the entire dataset is sampled).
-    seed : int
-        Seed for the random number generator. Used for reproducibility.
+    replace : bool
+        Whether to sample with replacement or not, defaults to True.
     """
     frac_samples: float = Field(default=0.8, gt=0, le=1)
-    seed: int = Field(default=None, ge=0, le=2**32-1)
+    replace: bool = Field(default=True)
 
 
-class BootstrapHandler(BaseModel):
+class BootstrapHandler():
     """
     BootstrapHandler class for resampling and reversing transformation and function application.
-
-    Attributes
-    ----------
-    model_handler : ModelHandler
-        Model handler object for accessing x and y data.
-    bootstrap_config : BootstrapConfig
-        Bootstrapping configuration object.
     """
-    model_handler: ModelHandler
-    bootstrap_config: BootstrapConfig
 
     def __init__(self, model_handler: ModelHandler, bootstrap_config: BootstrapConfig):
+        """
+        Parameters
+        model_handler : ModelHandler
+            Model handler object for accessing x and y data.
+        bootstrap_config : BootstrapConfig
+            Bootstrapping configuration object.
+        """
         self.model_handler = model_handler
         self.bootstrap_config = bootstrap_config
+        if not isinstance(self.model_handler, ModelHandler):
+            raise TypeError(
+                "model_handler must be of type ModelHandler or a subclass of it")
+        if not isinstance(self.bootstrap_config, BootstrapConfig):
+            raise TypeError(
+                "bootstrap_config must be of type BootstrapConfig or a subclass of it")
 
-    def _resample(self):
-        (X_ib, y_ib), (X_oob, y_oob), (X_ib_idx, y_ib_idx), (X_oob_idx, y_oob_idx) = Resampler(
+    def _resample(self, seed: int = 1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        (X_ib, y_ib), (X_oob, y_oob), ib_idx, oob_idx = Resampler(
             ResamplerConfig(
-                frac_samples=self.bootstrap_config.frac_samples, seed=self.bootstrap_config.seed, replace=True)
-        ).resample_data(self.model_handler._config.X_train, self.model_handler._config.y_train)
+                frac_samples=self.bootstrap_config.frac_samples, seed=seed, replace=self.bootstrap_config.replace)
+        ).resample_data([self.model_handler._config.X_train, self.model_handler._config.y_train])
 
         self.model_handler._config.X_train = X_ib
         self.model_handler._config.y_train = y_ib
 
-        return X_ib, y_ib, X_oob, y_oob, X_ib_idx, y_ib_idx, X_oob_idx, y_oob_idx
+        return X_ib, y_ib, X_oob, y_oob, ib_idx, oob_idx
 
-    def bootstrap(self, iteration_num: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        logger.info(f"Starting bootstrap iteration: {iteration_num}")
+    def bootstrap(self, seed: int = 1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Parameters
+        seed : int
+            Seed for the random number generator. Used for reproducibility.
+        """
+        if not isinstance(seed, int):
+            raise TypeError("seed must be of type int")
+        if seed < 0 or seed > 2**32-1:
+            raise ValueError("seed must be between 0 and 2**32-1")
 
-        X_ib, y_ib, X_oob, y_oob, X_ib_idx, y_ib_idx, X_oob_idx, y_oob_idx = self._resample(
-            iteration_num)
+        logger.info(f"Starting bootstrap...")
+
+        X_ib, y_ib, X_oob, y_oob, ib_idx, oob_idx = self._resample(seed=seed)
 
         X_test = self.model_handler._config.X_val if self.model_handler._config.X_val is not None else X_oob
         y_test = self.model_handler._config.y_val if self.model_handler._config.y_val is not None else y_oob
 
-        logger.info("Fitting the model...")
+        logger.info("Fitting the estimator...")
         self.model_handler.fit()
 
         logger.info("Making predictions...")
         y_pred_mean, y_pred_std = self.model_handler.predict(X_test=X_test)
+
+        logger.info("Fitting the explainer...")
+        self.model_handler.create_explainer()
 
         logger.info("Calculating SHAP values...")
         shap_values_mean = self.model_handler.calculate_shap_values(
@@ -76,4 +92,4 @@ class BootstrapHandler(BaseModel):
 
         mask = np.ma.masked_invalid
 
-        return reshape_to_2d_array(mask(y_test)), reshape_to_2d_array(mask(y_pred_mean)), reshape_to_2d_array(mask(y_pred_std)), reshape_to_2d_array(mask(shap_values_mean))
+        return reshape_to_2d_array(mask(y_test).data), reshape_to_2d_array(mask(y_pred_mean).data), reshape_to_2d_array(mask(y_pred_std).data), mask(shap_values_mean).data

@@ -157,7 +157,7 @@ class ModelHandler:
             y_pred)
         return y_pred_mean, y_pred_std
 
-    def create_explainer(self, X: Optional[ndarray] = None) -> None:
+    def create_explainer(self) -> None:
         """
         Fit the SHAP explainer using the fitted estimator.
         Args:
