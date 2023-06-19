@@ -3,7 +3,7 @@ from joblib import dump, load
 from sklearn.exceptions import NotFittedError
 from shap import Explainer, TreeExplainer
 from src.model_handler import ModelHandlerConfig
-from utils.validate import validate_file_path
+from utils.validate import validate_file_path, is_estimator_fitted
 from sklearn.base import BaseEstimator
 import numpy as np
 import shap
@@ -67,12 +67,15 @@ class ShapHandler:
                 "The provided estimator has no 'fit' method. Cannot calculate SHAP values.")
             raise ValueError("Invalid estimator: 'fit' method not found.")
 
+        assert is_estimator_fitted(fitted_base_estimator)
+        '''
         if not hasattr(fitted_base_estimator, "estimators_"):
             logger.error(
                 "The provided estimator has not been fitted. Cannot calculate SHAP values."
             )
             raise ValueError(
                 "Invalid estimator: estimator has not been fitted.")
+        '''
 
         if self._config.precreated_explainer is not None:
             self.explainer = self._config.precreated_explainer

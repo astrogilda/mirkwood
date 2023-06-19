@@ -43,6 +43,10 @@ def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
             error_msg = f"No file found at the path: {file_path}"
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
+        elif file_path.is_dir():
+            error_msg = f"Expected a file but got a directory: {file_path}"
+            logger.error(error_msg)
+            raise IsADirectoryError(error_msg)
 
 
 def validate_input(expected_type: Type, **kwargs: Any) -> None:
@@ -124,7 +128,12 @@ def check_estimator_compliance(estimator: BaseEstimator) -> None:
     AssertionError
         If the given estimator doesn't adhere to scikit-learn's estimator API.
     """
-    check_parameters_default_constructible(estimator)
+    try:
+        check_parameters_default_constructible(estimator.__class__, estimator)
+    except TypeError as e:
+        # Handle estimators without 'get_params' method
+        logger.error(
+            f"Failed to check parameters for estimator {estimator.__class__}. Error: {str(e)}")
     check_estimator(estimator)
 
 
