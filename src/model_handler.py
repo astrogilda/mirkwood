@@ -103,6 +103,13 @@ class ModelHandlerConfig(BaseModel):
         cls._validate_X_y_pair('X_val', 'y_val', values)
         return values
 
+    def __str__(self):
+        """
+        This will return a string representing the configuration object.
+        """
+        # Customize the string representation of the object.
+        return f"ModelHandlerConfig({self.dict()})"
+
 
 class ModelHandler:
     """

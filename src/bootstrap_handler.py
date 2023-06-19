@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class BootstrapConfig(BaseModel):
+class BootstrapHandlerConfig(BaseModel):
     """
-    BootstrapConfig class for setting up bootstrapping process.
+    BootstrapHandlerConfig class for setting up bootstrapping process.
 
     Attributes
     ----------
@@ -31,12 +31,12 @@ class BootstrapHandler():
     BootstrapHandler class for resampling and reversing transformation and function application.
     """
 
-    def __init__(self, model_handler: ModelHandler, bootstrap_config: BootstrapConfig):
+    def __init__(self, model_handler: ModelHandler, bootstrap_config: BootstrapHandlerConfig):
         """
         Parameters
         model_handler : ModelHandler
             Model handler object for accessing x and y data.
-        bootstrap_config : BootstrapConfig
+        bootstrap_config : BootstrapHandlerConfig
             Bootstrapping configuration object.
         """
         self.model_handler = model_handler
@@ -44,9 +44,9 @@ class BootstrapHandler():
         if not isinstance(self.model_handler, ModelHandler):
             raise TypeError(
                 "model_handler must be of type ModelHandler or a subclass of it")
-        if not isinstance(self.bootstrap_config, BootstrapConfig):
+        if not isinstance(self.bootstrap_config, BootstrapHandlerConfig):
             raise TypeError(
-                "bootstrap_config must be of type BootstrapConfig or a subclass of it")
+                "bootstrap_config must be of type BootstrapHandlerConfig or a subclass of it")
 
     def _resample(self, seed: int = 1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         (X_ib, y_ib), (X_oob, y_oob), ib_idx, oob_idx = Resampler(
@@ -59,7 +59,7 @@ class BootstrapHandler():
 
         return X_ib, y_ib, X_oob, y_oob, ib_idx, oob_idx
 
-    def bootstrap(self, seed: int = 1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def bootstrap(self, seed: int = 1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Parameters
         seed : int
@@ -70,7 +70,7 @@ class BootstrapHandler():
         if seed < 0 or seed > 2**32-1:
             raise ValueError("seed must be between 0 and 2**32-1")
 
-        logger.info(f"Starting bootstrap...")
+        logger.info("Starting bootstrap...")
 
         X_ib, y_ib, X_oob, y_oob, ib_idx, oob_idx = self._resample(seed=seed)
 
@@ -92,4 +92,4 @@ class BootstrapHandler():
 
         mask = np.ma.masked_invalid
 
-        return reshape_to_2d_array(mask(y_test).data), reshape_to_2d_array(mask(y_pred_mean).data), reshape_to_2d_array(mask(y_pred_std).data), mask(shap_values_mean).data
+        return reshape_to_2d_array(mask(y_test).data), reshape_to_2d_array(mask(y_pred_mean).data), reshape_to_2d_array(mask(y_pred_std).data), mask(shap_values_mean).data, ib_idx, oob_idx

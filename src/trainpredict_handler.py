@@ -1,28 +1,23 @@
 from src.data_handler import GalaxyProperty
-from pydantic import BaseModel, Field, validator, PrivateAttr, root_validator
-from typing import Optional, List, Tuple, Union, Any
+from pydantic import BaseModel, Field, validator, root_validator
 from sklearn.utils import check_X_y
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, Dict
 from multiprocessing import Pool
 import numpy as np
-from src.bootstrap_handler import BootstrapHandler
-from src.model_handler import ModelHandler
-from pydantic_numpy import NDArrayFp64
+from src.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
+from src.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
 from pathlib import Path
 from src.data_handler import GalaxyProperty, DataHandler
-from src.hpo_handler import HPOHandler, HPOHandlerConfig, PipelineConfig
+from src.hpo_handler import HPOHandler, HPOHandlerConfig
 import scipy.stats as stats
-from pydantic.fields import ModelField
 from utils.custom_cv import CustomCV
-from src.model_handler import ModelConfig, ModelHandler
 from utils.custom_transformers_and_estimators import XTransformer, YTransformer, create_estimator
 from utils.metrics import calculate_z_score
-
 import pandas as pd
-from pydantic import BaseModel, Field, root_validator
+import logging
 
 
-class TrainPredictHandler(BaseModel):
+class TrainPredictHandlerConfig(BaseModel):
     """
     TrainPredictHandler class for training and predicting an estimator using
     cross-validation, bootstrapping, and parallel computing.
@@ -68,26 +63,6 @@ class TrainPredictHandler(BaseModel):
             raise FileNotFoundError(f"File at {value} not found.")
         return value
 
-    @validator('X', 'y', 'X_test', 'y_test')
-    def validate_array_length(cls, v):
-        if v is not None and len(v) < 100:
-            raise ValueError('The array should have at least 100 elements')
-        return v
-
-    @validator('X', 'y', 'X_test', 'y_test', pre=True)
-    def _check_same_length(cls, value: np.ndarray, values: dict, config, field: ModelField):
-        if field.name in ['y', 'y_test'] and 'X' in values:
-            X = values['X']
-            X, y = check_X_y(X, value)
-            values['X'] = X
-            return y
-        elif field.name in ['y', 'y_test'] and 'X_test' in values:
-            X = values['X_test']
-            X, y = check_X_y(X, value)
-            values['X_test'] = X
-            return y
-        return value
-
     @validator('X', 'X_test')
     def _check_X_dimension(cls, v: np.ndarray) -> np.ndarray:
         """Validate if the input X array is two-dimensional"""
@@ -107,18 +82,70 @@ class TrainPredictHandler(BaseModel):
         return v
 
     @validator('X_transformer', 'y_transformer', pre=True)
-    def validate_transformers(cls, v: Any) -> Any:
-        """Validate if the input v is an instance of the corresponding Transformer class"""
+    def validate_transformers(cls, v, values, **kwargs):
         if not isinstance(v, (XTransformer, YTransformer)):
-            raise ValueError('Invalid transformer object')
+            raise ValueError("Invalid transformer provided")
         return v
 
-    @root_validator(pre=True)
-    def apply_noisy_X(cls, values: dict) -> dict:
-        if 'X' in values and values.get('X_noise_percent') is not None:
-            values['X'] = cls.create_noisy_X(
-                values['X'], values['X_noise_percent'])
+    @validator('model_config', pre=True)
+    def validate_model_config(cls, v, values, **kwargs):
+        if not isinstance(v, ModelConfig):
+            raise ValueError("Invalid model configuration provided")
+        return v
+
+    @root_validator
+    def validate_array_lengths(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        X, y, X_test, y_test = values.get('X'), values.get(
+            'y'), values.get('X_test'), values.get('y_test')
+
+        # Check if X and y have the same number of samples
+        if X is not None and y is not None and X.shape[0] != y.shape[0]:
+            raise ValueError("X and y should have the same number of samples")
+
+        # Check if X_test and y_test have the same number of samples
+        if X_test is not None and y_test is not None and X_test.shape[0] != y_test.shape[0]:
+            raise ValueError(
+                "X_test and y_test should have the same number of samples")
+
         return values
+
+    @validator('galaxy_property', pre=True)
+    def validate_galaxy_property(cls, v, values, **kwargs):
+        if not isinstance(v, GalaxyProperty):
+            raise ValueError("Invalid galaxy property provided")
+        return v
+
+    @validator('X_noise_percent', pre=True)
+    def validate_X_noise_percent(cls, v, values, **kwargs):
+        if v is not None and (v < 0 or v > 1):
+            raise ValueError("X_noise_percent should be between 0 and 1")
+        return v
+
+    def __str__(self):
+        """
+        This will return a string representing the configuration object.
+        """
+        # Customize the string representation of the object.
+        return f"TrainPredictHandlerConfig({self.dict()})"
+
+
+'''
+# Example usage:
+config = TrainPredictHandlerConfig(
+    X=np.random.rand(100, 5),
+    y=np.random.rand(100),
+    feature_names=["a", "b", "c", "d", "e"]
+)
+print(config)
+
+'''
+
+
+class TrainPredictHandler:
+    def __init__(self, config: TrainPredictHandlerConfig):
+        if not isinstance(config, TrainPredictHandlerConfig):
+            raise ValueError('Invalid config object')
+        self._config = config
 
     @staticmethod
     def create_noisy_X(X: np.ndarray, X_noise_percent: float) -> np.ndarray:
@@ -132,77 +159,58 @@ class TrainPredictHandler(BaseModel):
         Train and predict using the pipeline.
         Return a tuple of lists for predictions, std, upper and lower bounds, epis std, actuals, and mean shap.
         """
-
+        # Prepare the estimator and cross-validation indices
         estimator = create_estimator(
-            model_config=self.model_config, x_transformer=self.X_transformer, y_transformer=self.y_transformer)
-
+            model_config=self._config.model_config, x_transformer=self._config.X_transformer, y_transformer=self._config.y_transformer)
         metrics_df = pd.DataFrame()
+        cv_outer = CustomCV(
+            self._config.y, n_folds=self._config.n_folds_outer).get_indices()
+        cv_inner = CustomCV(
+            self._config.y, n_folds=self._config.n_folds_inner).get_indices()
 
-        cv_outer = CustomCV(self.y, n_folds=self.n_folds_outer).get_indices()
-        cv_inner = CustomCV(self.y, n_folds=self.n_folds_inner).get_indices()
+        yval_lists = [np.array([]) for _ in range(7)]
 
         for i, (train_idx, val_idx) in enumerate(cv_outer):
-            yval_lists = [np.array([]) for _ in range(
-                7)]  # 7 different predictions returned
+            logging.info('CV fold %d of %d', i+1, len(cv_outer))
 
-            # ensure the arrays/lists are not empty
-            assert len(train_idx) > 0, "Training index array is empty"
-            assert len(val_idx) > 0, "Validation index array is empty"
-
-            print('CV fold %d of %d' % (i+1, len(cv_outer)))
-            print(f"train_idx: {train_idx}, type: {type(train_idx)}")
-            print(f"val_idx: {val_idx}, type: {type(val_idx)}")
-
-            # ensure train_idx and val_idx are integer arrays
+            # Ensure train_idx and val_idx are integer arrays and not empty
             train_idx = np.array(train_idx, dtype=int)
             val_idx = np.array(val_idx, dtype=int)
+            if not train_idx.size or not val_idx.size:
+                raise ValueError('Training or validation index array is empty')
 
-            X_train, X_val = self.X[train_idx], self.X[val_idx]
-            y_train, y_val = self.y[train_idx], self.y[val_idx]
+            X_train, X_val = self._config.X[train_idx], self._config.X[val_idx]
+            y_train, y_val = self._config.y[train_idx], self._config.y[val_idx]
 
-            # calculate the z-score
-            z_score = calculate_z_score(confidence_level=self.confidence_level)
+            z_score = calculate_z_score(
+                confidence_level=self._config.confidence_level)
 
-            # carry out hyperparameter tuning
-            timeout = 60 * 60  # 1 hour
-            n_trials = 100
-            hpo_handler = HPOHandler(params=HPOHandlerConfig(estimator=estimator,
-                                                             cv=cv_inner, z_score=z_score, n_jobs=self.n_jobs_hpo, timeout=timeout, n_trials=n_trials), weight_flag=self.weight_flag)
+            # Hyperparameter tuning
+            hpo_handler_config = HPOHandlerConfig(estimator=estimator, cv=cv_inner, z_score=z_score,
+                                                  n_jobs=self._config.n_jobs_hpo, timeout=60*60, n_trials=100)
+            hpo_handler = HPOHandler(
+                params=hpo_handler_config, weight_flag=self._config.weight_flag)
             hpo_handler.fit(X_train=X_train, y_train=y_train)
             best_estimator = hpo_handler.params.estimator
 
-            # setup the model handler with the best estimator found using HPO, and the right training and validation data
-
-            model_handler = ModelHandler(
-                X_train=X_train,
-                y_train=y_train,
-                feature_names=self.feature_names,
-                X_val=X_val,
-                y_val=y_val,
-                estimator=best_estimator,
-                fitting_mode=self.fitting_mode,
-                file_path=self.file_path,
-                shap_file_path=self.shap_file_path,
-                weight_flag=self.weight_flag,
-                model_config=self.model_config,
-                X_transformer=self.X_transformer,
-                y_transformer=self.y_transformer,
-            )
-
-            # create a BootstrapHandler for each fold
+            # Prepare the ModelHandler and BootstrapHandler
+            model_handler = self._prepare_model_handler(
+                X_train, y_train, X_val, y_val, best_estimator)
+            bootstrap_handler_config = BootstrapHandlerConfig(
+                frac_samples=self._config.frac_samples, replace=True)
             bootstrap_handler = BootstrapHandler(
-                model_handler=model_handler, frac_samples=self.frac_samples, galaxy_property=self.galaxy_property, z_score=z_score)
+                model_handler=model_handler, bootstrap_config=bootstrap_handler_config)
 
-            with Pool(self.num_bs_inner) as p:
+            # Perform bootstrapping
+            with Pool(self._config.num_bs_inner) as p:
                 args = ((bootstrap_handler, j)
-                        for j in range(self.num_bs_inner))
-                concat_output = p.starmap(
-                    BootstrapHandler.bootstrap, args)
+                        for j in range(self._config.num_bs_inner))
+                concat_output = p.starmap(BootstrapHandler.bootstrap, args)
 
             yval_outputs = TrainPredictHandler.process_concat_output(
                 concat_output)
-
-            y_val = DataHandler.postprocess_y(y_val, prop=self.galaxy_property)
+            y_val = DataHandler.postprocess_y(
+                y_val, prop=self._config.galaxy_property)
 
             for idx, arr in enumerate(yval_outputs):
                 yval_lists[idx] = np.concatenate([yval_lists[idx], arr])
@@ -211,31 +219,34 @@ class TrainPredictHandler(BaseModel):
 
         return tuple(yval_lists)
 
+    def _prepare_model_handler(self, X_train, y_train, X_val, y_val, best_estimator):
+        return ModelHandler(
+            X_train=X_train,
+            y_train=y_train,
+            feature_names=self._config.feature_names,
+            X_val=X_val,
+            y_val=y_val,
+            estimator=best_estimator,
+            fitting_mode=self._config.fitting_mode,
+            file_path=self._config.file_path,
+            shap_config=self._config.shap_config,
+            model_config=self._config.model_config,
+            X_transformer=self._config.X_transformer,
+            y_transformer=self._config.y_transformer,
+        )
+
     @staticmethod
-    def process_concat_output(concat_output: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def process_concat_output(concat_output: List[Tuple[np.ndarray, ...]]) -> List[np.ndarray]:
         """
-        Process the output from the bootstrap handler.
-        Returns tuples of prediction mean, std, lower, upper, epis std, and mean shap.
+        Process the concatenated output from the bootstrapping process.
         """
+        y_val_agg = [np.zeros_like(concat_output[0][0]) for _ in range(7)]
 
-        # first three elements are of shape (n, 1) and the fourth element is of shape (n, m)
+        for output in concat_output:
+            for idx, arr in enumerate(output):
+                y_val_agg[idx] += arr
 
-        # Split var into four lists, each containing all the versions of a specific element
-        list1, list2, list3, list4 = zip(*concat_output)
+        for idx in range(7):
+            y_val_agg[idx] /= len(concat_output)
 
-        # Convert the lists to arrays and stack along a new dimension
-        orig_array = np.stack(list1, axis=0)
-        # shape is (num_bs_inner, n, 1)
-        mu_array = np.stack(list2, axis=0)
-        # shape is (num_bs_inner, n, 1)
-        std_array = np.stack(list3, axis=0)
-        # shape is (num_bs_inner, n, 1)
-        shap_mu_array = np.stack(list4, axis=0)
-        # shape is (num_bs_inner, n, m)
-
-        yval_pred_mean = np.ma.mean(mu_array, axis=0)
-        yval_pred_std = np.ma.sqrt(np.ma.mean(std_array**2, axis=0))
-        yval_pred_std_epis = np.ma.std(mu_array, axis=0)
-        yval_shap_mean = np.ma.mean(shap_mu_array, axis=0)
-
-        return orig_array[0], yval_pred_mean, yval_pred_std, yval_pred_std_epis, yval_shap_mean
+        return y_val_agg

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from src.model_handler import ModelHandler, ModelHandlerConfig
-from src.bootstrap_handler import BootstrapHandler, BootstrapConfig
+from src.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 from pydantic import ValidationError
 from numpy.testing import assert_array_equal
 from multiprocessing import Pool
@@ -35,11 +35,11 @@ model_handler = ModelHandler(model_handler_config)
 ])
 def test_BootstrapHandler_init(frac_samples, expect_pass):
     if expect_pass:
-        config = BootstrapConfig(frac_samples=frac_samples)
+        config = BootstrapHandlerConfig(frac_samples=frac_samples)
         BootstrapHandler(model_handler=model_handler, bootstrap_config=config)
     else:
         with pytest.raises(ValidationError):
-            BootstrapConfig(frac_samples=frac_samples)
+            BootstrapHandlerConfig(frac_samples=frac_samples)
 
 
 @pytest.mark.parametrize("frac_samples,X,y", [
@@ -54,17 +54,20 @@ def test_bootstrap_with_different_frac_samples(frac_samples, X, y):
     model_handler_config = ModelHandlerConfig(
         X_train=X, y_train=y, X_val=X, y_val=y, feature_names=feature_names)
     model_handler = ModelHandler(model_handler_config)
-    bootstrap_config = BootstrapConfig(frac_samples=frac_samples)
+    bootstrap_config = BootstrapHandlerConfig(frac_samples=frac_samples)
     bootstrap_handler = BootstrapHandler(
         model_handler=model_handler, bootstrap_config=bootstrap_config)
 
-    y_test, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap()
+    y_test, y_pred_mean, y_pred_std, shap_values_mean, idx_ib, idx_oob = bootstrap_handler.bootstrap()
 
     # Assert the shapes are consistent
     assert_array_equal(y_test.ravel(), model_handler_config.y_val)
     assert y_pred_mean.shape == y_test.shape
     assert y_pred_std.shape == y_test.shape
     assert shap_values_mean.shape == X.shape
+    if frac_samples < 1:
+        assert np.array_equal(np.sort(np.unique(np.concatenate((idx_ib, idx_oob)))
+                                      ), np.arange(X.shape[0]))
 
     # Assert that the standard deviations are positive
     assert np.all(y_pred_std >= 0)
@@ -81,7 +84,7 @@ def test_bootstrap_with_different_frac_samples(frac_samples, X, y):
     (None, False)
 ])
 def test_bootstrap_with_invalid_seed(seed, expect_pass):
-    bootstrap_config = BootstrapConfig(frac_samples=0.8)
+    bootstrap_config = BootstrapHandlerConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
         model_handler=model_handler, bootstrap_config=bootstrap_config)
 
@@ -97,10 +100,10 @@ def test_bootstrap_with_invalid_seed(seed, expect_pass):
 
 def test_bootstrap_metrics():
     # Test that the metrics are calculated correctly
-    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_config = BootstrapHandlerConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
         model_handler=model_handler, bootstrap_config=bootstrap_config)
-    y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap()
+    y_val, y_pred_mean, y_pred_std, shap_values_mean, _, _ = bootstrap_handler.bootstrap()
 
     confidence_level = 0.95
     z_score = calculate_z_score(confidence_level=confidence_level)
@@ -126,17 +129,19 @@ def test_bootstrap_metrics():
 
 def test_bootstrap_multiprocessing():
     """Test BootstrapHandler bootstrap method in a multiprocessing context."""
-    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_config = BootstrapHandlerConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
         model_handler=model_handler, bootstrap_config=bootstrap_config)
 
     with Pool(processes=4) as pool:
         results = pool.map(bootstrap_handler.bootstrap, range(4))
         for result in results:
-            y_val, y_pred_mean, y_pred_std, shap_values_mean = result
+            y_val, y_pred_mean, y_pred_std, shap_values_mean, idx_ib, idx_oob = result
             assert y_val.shape == y_pred_mean.shape
             assert y_pred_mean.shape == y_pred_std.shape
             assert model_handler._config.X_val.shape == shap_values_mean.shape
+            assert np.array_equal(np.sort(np.unique(np.concatenate((idx_ib, idx_oob)))
+                                          ), np.arange(model_handler._config.X_train.shape[0]))
 
 
 @pytest.mark.parametrize("data", [
@@ -154,7 +159,7 @@ def test_bootstrap_non_random_data(data):
     model_handler_config = ModelHandlerConfig(X_train=X_train, y_train=y_train,
                                               X_val=X_val, y_val=y_val, feature_names=feature_names)
     model_handler = ModelHandler(config=model_handler_config)
-    bootstrap_config = BootstrapConfig(frac_samples_best=0.8)
+    bootstrap_config = BootstrapHandlerConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
         model_handler=model_handler, bootstrap_config=bootstrap_config)
 
@@ -162,11 +167,13 @@ def test_bootstrap_non_random_data(data):
         with pytest.raises(ValueError, match="Resampling would be nonsensical when all arrays have only one unique element."):
             bootstrap_handler.bootstrap()
     else:
-        y_val, y_pred_mean, y_pred_std, shap_values_mean = bootstrap_handler.bootstrap()
+        y_val, y_pred_mean, y_pred_std, shap_values_mean, idx_ib, idx_oob = bootstrap_handler.bootstrap()
 
         assert y_val.shape == y_pred_mean.shape
         assert y_pred_mean.shape == y_pred_std.shape
         assert X_val.shape == shap_values_mean.shape
+        assert np.array_equal(np.sort(np.unique(np.concatenate((idx_ib, idx_oob)))
+                                      ), np.arange(X_train.shape[0]))
 
 
 '''
