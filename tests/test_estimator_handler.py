@@ -8,6 +8,8 @@ from pathlib import Path
 import os
 import numpy as np
 from pydantic import ValidationError
+import logging
+import tempfile
 
 
 @pytest.fixture(scope='function')
@@ -20,6 +22,46 @@ def dummy_estimator_handler():
     return EstimatorHandler(config)
 
 
+@pytest.mark.parametrize("fit,valid_filepath", [(True, True), (False, True), (True, False), (False, False)])
+def test_save_and_load_estimator(dummy_estimator_handler, fit, valid_filepath, caplog):
+    model = create_estimator(dummy_estimator_handler._config.model_config,
+                             dummy_estimator_handler._config.X_transformer,
+                             dummy_estimator_handler._config.y_transformer)
+    if valid_filepath:
+        with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as temp:
+            dummy_estimator_handler._config.file_path = temp.name
+            if fit:
+                model.fit(dummy_estimator_handler._config.X_train,
+                          dummy_estimator_handler._config.y_train)
+                dummy_estimator_handler._estimator = model
+                dummy_estimator_handler._fitted = True
+
+                dummy_estimator_handler._save_estimator()
+                assert Path(dummy_estimator_handler._config.file_path).exists()
+
+                loaded_estimator_handler = EstimatorHandler(
+                    dummy_estimator_handler._config)
+                loaded_estimator_handler._load_estimator()
+                assert isinstance(loaded_estimator_handler.estimator,
+                                  CustomTransformedTargetRegressor)
+                assert loaded_estimator_handler.is_fitted
+            else:
+                with pytest.raises(NotFittedError):
+                    dummy_estimator_handler._save_estimator()
+
+                # Since the estimator has not been fitted, it has not been saved, and thus not be loaded
+                with pytest.raises(EOFError):
+                    loaded_estimator_handler = EstimatorHandler(
+                        dummy_estimator_handler._config)
+                    loaded_estimator_handler._load_estimator()
+    else:
+        dummy_estimator_handler._config.file_path = None
+        with caplog.at_level(logging.WARNING):
+            dummy_estimator_handler._save_estimator()
+        assert "No filename provided. Skipping save." in caplog.text
+
+
+'''
 def test_save_and_load_estimator(dummy_estimator_handler):
     dummy_estimator_handler.fit()
     file_path = Path("test_estimator_file")
@@ -39,6 +81,7 @@ def test_save_and_load_estimator(dummy_estimator_handler):
 
     # Clean up
     file_path.unlink()
+'''
 
 
 def test_load_estimator_file_not_exists(dummy_estimator_handler):

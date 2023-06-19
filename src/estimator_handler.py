@@ -88,13 +88,16 @@ class EstimatorHandler:
 
     def _save_estimator(self):
         if self._config.file_path is not None:
-            try:
-                dump({
-                    "estimator": self.estimator,
-                    "is_fitted": self.is_fitted
-                }, self._config.file_path)
-            except (ValueError, IOError) as e:
-                logger.warning(f"Failed to save the estimator: {e}")
+            if self.is_fitted:
+                try:
+                    dump({
+                        "estimator": self.estimator,
+                        "is_fitted": self.is_fitted
+                    }, self._config.file_path)
+                except (ValueError, IOError) as e:
+                    logger.warning(f"Failed to save the estimator: {e}")
+            else:
+                raise NotFittedError("The estimator has not been fitted.")
         else:
             logger.warning("No filename provided. Skipping save.")
 
