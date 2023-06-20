@@ -7,7 +7,7 @@ import pytest
 import math
 from pydantic import ValidationError
 from utils.validate import check_estimator_compliance
-from utils.custom_transformers_and_estimators import CustomNGBRegressor
+from utils.custom_transformers_and_estimators import CustomNGBRegressor, PostProcessY, MultipleTransformer
 
 # Define a Hypothesis strategy for valid weightify initializers
 valid_weightify_args = st.builds(WeightifyConfig,

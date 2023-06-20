@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from hypothesis import given, strategies as st, settings
 from utils.custom_transformers_and_estimators import *
-from utils.custom_transformers_and_estimators import _MultipleTransformer
+from utils.custom_transformers_and_estimators import MultipleTransformer
 from utils.validate import *
 from utils.reshape import *
 from utils.resample import *
@@ -209,12 +209,12 @@ def test_multiple_transformer_wrong_input():
     """Test MultipleTransformer's response to invalid input -- single transformer"""
     # This should raise a TypeError because MultipleTransformer expects instances of YTransformer
     with pytest.raises(TypeError):
-        _MultipleTransformer([StandardScaler(
+        MultipleTransformer([StandardScaler(
         ), f"y_transformer should be an instance of YTransformer, but got {type(StandardScaler()).__name__}"])
     with pytest.raises(TypeError):
         transformer = TransformerConfig(
             name="standard_scaler", transformer=StandardScaler())
-        _MultipleTransformer(
+        MultipleTransformer(
             [transformer, f"y_transformer should be an instance of YTransformer, but got {type(transformer).__name__}"])
 
 
@@ -223,7 +223,7 @@ def test_multiple_transformer_wrong_input_list():
     stand_scaler = StandardScaler()
     func_trans = FunctionTransformer(np.log1p)
     with pytest.raises(TypeError):
-        _MultipleTransformer([
+        MultipleTransformer([
             stand_scaler,
             func_trans
         ])
@@ -238,7 +238,7 @@ def test_multiple_transformer(X):
     y_transformer = YTransformer(transformers=[
         TransformerConfig(name="standard_scaler", transformer=stand_scaler),
     ])
-    multi_trans = _MultipleTransformer(y_transformer=y_transformer)
+    multi_trans = MultipleTransformer(y_transformer=y_transformer)
     # TransformerConfig(name="func_transformer", transformer=func_trans)
     multi_trans.fit(X)
     X_trans = multi_trans.transform(X)
@@ -334,7 +334,7 @@ def test_custom_transformed_target_regressor(arrays):
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                           for transformer in X_transformer.transformers])
-    pipeline_y = _MultipleTransformer(y_transformer=y_transformer)
+    pipeline_y = MultipleTransformer(y_transformer=y_transformer)
     feature_pipeline = Pipeline([
         ('preprocessor', pipeline_X),
         ('regressor', ngb)

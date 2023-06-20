@@ -6,7 +6,7 @@ from ngboost.scores import LogScore
 from sklearn.pipeline import Pipeline
 from sklearn.compose import TransformedTargetRegressor
 import numpy as np
-from utils.custom_transformers_and_estimators import TransformerTuple, TransformerConfig, XTransformer, YTransformer, _MultipleTransformer, ReshapeTransformer, CustomNGBRegressor, CustomTransformedTargetRegressor, create_estimator
+from utils.custom_transformers_and_estimators import TransformerTuple, TransformerConfig, XTransformer, YTransformer, MultipleTransformer, ReshapeTransformer, CustomNGBRegressor, CustomTransformedTargetRegressor, create_estimator
 from ngboost import NGBRegressor
 from utils.weightify import Weightify
 
@@ -46,7 +46,7 @@ X, y = load_diabetes(return_X_y=True)
 print(X.shape, y.shape)
 
 y_transformer = YTransformer()
-pipeline_y = _MultipleTransformer(y_transformer)
+pipeline_y = MultipleTransformer(y_transformer)
 pipeline_y.fit(X, y)
 
 ce = create_estimator()
@@ -70,7 +70,7 @@ transformations_Y = YTransformer(transformers=TransformerTuple([
 # Create pipelines for X and y
 pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                        for transformer in transformations_X.transformers])
-pipeline_y = _MultipleTransformer(transformations_Y.transformers)
+pipeline_y = MultipleTransformer(transformations_Y.transformers)
 
 
 if transformations_X.transformers:
