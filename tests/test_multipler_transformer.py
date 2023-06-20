@@ -55,7 +55,7 @@ def test_multiple_transformer_wrong_input():
     # This should raise a TypeError because MultipleTransformer expects instances of YTransformer
     with pytest.raises(TypeError):
         MultipleTransformer([StandardScaler(
-        ), f"y_transformer should be an instance of YTransformer, but got {type(StandardScaler()).__name__}"])
+        ), f"y_transformer should be an instance of YTransformer, but got {type([StandardScaler()]).__name__}"])
     with pytest.raises(TypeError):
         transformer = TransformerConfig(
             name="standard_scaler", transformer=StandardScaler())

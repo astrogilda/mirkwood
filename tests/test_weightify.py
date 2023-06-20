@@ -4,10 +4,12 @@ from sklearn.exceptions import NotFittedError
 from utils.weightify import Weightify, WeightifyConfig, Style
 import numpy as np
 import pytest
-import math
+
 from pydantic import ValidationError
 from utils.validate import check_estimator_compliance
-from utils.custom_transformers_and_estimators import CustomNGBRegressor, PostProcessY, MultipleTransformer
+from src.customngb_regressor import CustomNGBRegressor
+from src.postprocessy_transformer import PostProcessY
+from src.multiple_transformer import MultipleTransformer
 
 # Define a Hypothesis strategy for valid weightify initializers
 valid_weightify_args = st.builds(WeightifyConfig,

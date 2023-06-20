@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Union, Tuple, Dict, Callable
+from typing import Any, List, Optional, Union, Tuple, Dict, Callable, Type
 import functools
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.utils.estimator_checks import (
@@ -14,6 +14,8 @@ from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+
+EPS = 1e-6
 
 
 def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:

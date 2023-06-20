@@ -5,7 +5,7 @@ from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 import numpy as np
 import logging
-from xandy_transformers import YTransformer, XTransformer
+from src.xandy_transformers import YTransformer, XTransformer
 from utils.validate import apply_transform_with_checks
 
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +26,11 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, y_transformer: YTransformer, sanity_check: bool = True):
+        if not isinstance(y_transformer, YTransformer):
+            raise TypeError(
+                f"y_transformer should be an instance of YTransformer, but got {type(y_transformer).__name__} instead")
+        if not isinstance(sanity_check, bool):
+            raise TypeError("sanity_check should be a boolean")
         self.y_transformer = y_transformer
         self.sanity_check = sanity_check
 
