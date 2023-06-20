@@ -1,3 +1,9 @@
+from sklearn.datasets import make_regression
+from utils.weightify import Weightify
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
 from hypothesis.extra.numpy import arrays
 from hypothesis import given, strategies as st, settings
 from sklearn.exceptions import NotFittedError
@@ -189,3 +195,59 @@ def test_weightify_invalid_init(c, y):
     with pytest.raises(ValidationError):
         w.fit(y, c)
 '''
+
+
+# Initialize the Weightify transformer
+weightify = Weightify(style="lds", lds_ks=3, lds_sigma=1,
+                      n_bins=10, bw_method="scott", beta=0.5)
+
+# Initialize the pipeline
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),  # Use standard scaler as preprocessor
+    ('weightify', weightify)  # Apply Weightify transformer
+])
+
+# Initialize the TransformedTargetRegressor
+ttregressor = TransformedTargetRegressor(
+    regressor=LinearRegression(), transformer=pipeline)
+
+
+def test_weightify():
+    X, y = make_regression(n_samples=100, n_features=1, noise=0.1)
+    ttregressor.fit(X, y)
+    predictions = ttregressor.predict(X)
+
+    # Test that model can fit and predict without errors
+    assert predictions.shape == y.shape
+
+    # Test that Weightify attributes are set after fitting
+    assert hasattr(ttregressor.transformer.named_steps['weightify'], 'fitted_')
+    assert hasattr(
+        ttregressor.transformer.named_steps['weightify'], 'poly_coeffs_')
+
+    # Test that predicted values have expected properties
+    assert predictions.min() <= y.max()
+    assert predictions.max() >= y.min()
+
+
+@pytest.mark.parametrize("params", [
+    {"style": Style.DIR, "lds_ks": 3, "lds_sigma": 1,
+        "n_bins": 10, "bw_method": "scott", "beta": 0.5},
+    {"style": Style.INV, "lds_ks": 3, "lds_sigma": 1,
+        "n_bins": 10, "bw_method": "scott", "beta": 0.5},
+])
+def test_weightify_params(params):
+    weightify = Weightify(**params)
+    pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        ('weightify', weightify)
+    ])
+    ttregressor = TransformedTargetRegressor(
+        regressor=LinearRegression(), transformer=pipeline)
+
+    X, y = make_regression(n_samples=100, n_features=1, noise=0.1)
+    ttregressor.fit(X, y)
+
+    # Test that model can fit and predict with different parameters
+    predictions = ttregressor.predict(X)
+    assert predictions.shape == y.shape

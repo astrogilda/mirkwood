@@ -81,8 +81,8 @@ class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
                  minibatch_frac=default_model_config.minibatch_frac,
                  verbose=default_model_config.verbose,
                  natural_gradient=default_model_config.natural_gradient,
-                 early_stopping_rounds=default_model_config.early_stopping_rounds, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+                 early_stopping_rounds=default_model_config.early_stopping_rounds):
+        super().__init__()
         self.Base = Base
         self.Dist = Dist
         self.Score = Score
@@ -120,12 +120,12 @@ class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
 
     def get_params(self, deep=True):
         params = super().get_params(deep=deep)
-        model_config_params = {key: getattr(self, key) for key in vars(self)}
-        params.update(model_config_params)
+        # model_config_params = {key: getattr(self, key) for key in vars(self)}
+        # params.update(model_config_params)
         return params
 
     def set_params(self, **params):
         super().set_params(**params)
-        for key, value in params.items():
-            setattr(self, key, value)
+        # for key, value in params.items():
+        #    setattr(self, key, value)
         return self

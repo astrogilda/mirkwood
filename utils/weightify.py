@@ -1,3 +1,4 @@
+from sklearn.utils.validation import check_array
 from pydantic import BaseModel, Field
 from typing import Union, Optional
 from numba import jit
@@ -219,6 +220,9 @@ class Weightify(BaseEstimator, TransformerMixin):
         self : Weightify
             The fitted Weightify transformer.
         """
+        if y is not None:
+            raise ValueError("y must be None")
+
         config = WeightifyConfig(
             style=self.style,
             lds_ks=self.lds_ks,
@@ -228,7 +232,7 @@ class Weightify(BaseEstimator, TransformerMixin):
             beta=self.beta
         )
 
-        # X = reshape_to_1d_array(X)
+        X = reshape_to_1d_array(X)
 
         if sub_size < len(X):
             indices = np.random.permutation(len(X))[:sub_size]
@@ -263,7 +267,7 @@ class Weightify(BaseEstimator, TransformerMixin):
         check_is_fitted(self, 'fitted_')
 
         poly_order = len(self.poly_coeffs_) - 1
-        # X = reshape_to_1d_array(X)
+        X = reshape_to_1d_array(X)
         transposed_X = np.vstack([X ** (poly_order - i)
                                  for i in range(poly_order + 1)]).T
         sample_weights = np.dot(transposed_X, self.poly_coeffs_)

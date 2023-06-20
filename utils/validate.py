@@ -1,3 +1,6 @@
+from sklearn.utils.validation import check_array
+from sklearn.base import TransformerMixin
+from typing import Optional, Union
 from typing import Any, List, Optional, Union, Tuple, Dict, Callable, Type
 import functools
 from sklearn.base import BaseEstimator, TransformerMixin, clone
@@ -68,6 +71,9 @@ def validate_input(expected_type: Type, **kwargs: Any) -> None:
         raise ValueError("Expected type is not a type")
 
     for arg, value in kwargs.items():
+        # print(expected_type, type(value))
+        # print(expected_type.__module__, type(value).__module__)
+
         if not isinstance(value, expected_type):
             error_msg = f"Expected {arg} to be a {expected_type.__name__}, but got {type(value).__name__}"
             logger.error(error_msg)
@@ -163,58 +169,6 @@ def check_estimator_compliance(estimator: BaseEstimator, skips: set = {}) -> Non
                 raise e
             else:
                 check(estimator_clone)
-
-
-def apply_transform_with_checks(transformer: TransformerMixin, method_name: str, X: np.ndarray, y: Optional[np.ndarray] = None, sanity_check: bool = False, **kwargs) -> Union[np.ndarray, TransformerMixin]:
-    logger.info(
-        f'Applying transformation using {transformer.__class__.__name__}.')
-
-    valid_methods = ['transform', 'fit', 'fit_transform',
-                     'inverse_transform', 'predict', 'predict_std']
-    if method_name not in valid_methods:
-        raise ValueError(
-            f"Invalid method name: {method_name}. Must be one of {valid_methods}")
-
-    method = getattr(transformer, method_name)
-
-    try:
-        if y is None:
-            transformed_data = method(X)
-        else:
-            transformed_data = method(X, y)
-    except Exception as e:
-        raise ValueError(
-            f"Failed to transform data with {transformer.__class__.__name__}. Original error: {e}")
-
-    if sanity_check:
-        if method_name in ['transform', 'fit_transform']:
-            inverse_transformed_data = transformer.inverse_transform(
-                transformed_data)
-            assert np.allclose(
-                a=X, b=inverse_transformed_data, rtol=0.05, atol=1e-10), 'The inverse transformation correctly reverts the data.'
-        elif method_name == 'inverse_transform' and transformer.__class__.__name__ == 'StandardScaler':
-            transformed_mean = np.mean(transformed_data, axis=0)
-            transformer_mean = transformer.mean_
-            mean_check = np.allclose(
-                transformed_mean, transformer_mean, rtol=EPS, atol=EPS)
-            if not np.allclose(X, np.mean(X, axis=0), rtol=1e-1):
-                transformed_std = np.std(transformed_data, axis=0)
-                transformer_std = np.sqrt(transformer.var_)
-                std_check = np.allclose(
-                    transformed_std, transformer_std, rtol=EPS, atol=EPS)
-            else:
-                std_check = True
-            assert mean_check and std_check, 'The inverse transformation correctly reverts the data.'
-
-    logger.info(
-        f'Transformation using {transformer.__class__.__name__} completed.')
-
-    if method_name not in ['fit_transform', 'fit']:
-        return transformed_data
-    elif method_name == 'fit_transform':
-        return transformer, transformed_data
-    else:
-        return transformer
 
 
 '''

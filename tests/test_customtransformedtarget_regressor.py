@@ -6,9 +6,10 @@ from src.multiple_transformer import MultipleTransformer
 from src.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from src.customngb_regressor import ModelConfig, CustomNGBRegressor
 from src.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
-from utils.validate import *
-from utils.reshape import *
-from utils.resample import *
+from utils.weightify import Weightify
+# from utils.validate import *
+# from utils.reshape import *
+# from utils.resample import *
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler
@@ -71,9 +72,11 @@ def test_create_estimator(arrays):
     model_config = ModelConfig()
     X_transformer = XTransformer()
     y_transformer = YTransformer()
+    weightifier = Weightify()
     ttr = create_estimator(model_config=model_config,
                            X_transformer=X_transformer,
-                           y_transformer=y_transformer)
+                           y_transformer=y_transformer,
+                           weightifier=weightifier)
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
     ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val,
@@ -114,8 +117,8 @@ def test_create_estimator_None(arrays):
 
 def test_create_estimator_invalid():
     """Test create_estimator's response to invalid input"""
-    # with pytest.raises(TypeError):
-    #    create_estimator("not a ModelConfig", None, None)
+    with pytest.raises(TypeError):
+        create_estimator("not a ModelConfig", None, None)
     with pytest.raises(TypeError):
         create_estimator(None, "not a XTransformer", None)
     with pytest.raises(TypeError):
