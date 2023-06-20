@@ -272,75 +272,67 @@ class _MultipleTransformer(BaseEstimator, TransformerMixin):
         return self
 
 
-class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
-    def __init__(self, config=None, *args, **kwargs):
-        self.config = None
-        super().__init__(*args, **kwargs)
-        self.fitted_ = False
+default_model_config = ModelConfig()
 
-    def fit(self, X: np_ndarray, y: np_ndarray, config: ModelConfig, *args, **kwargs):
-        """Fits the CustomNGBRegressor."""
-        self.config = config
-        self.set_params(Base=config.Base, Dist=config.Dist, Score=config.Score,
-                        n_estimators=config.n_estimators, learning_rate=config.learning_rate,
-                        col_sample=config.col_sample, minibatch_frac=config.minibatch_frac,
-                        verbose=config.verbose, natural_gradient=config.natural_gradient,
-                        early_stopping_rounds=config.early_stopping_rounds, *args, **kwargs)
-        logger.info('Fitting CustomNGBRegressor.')
+
+class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
+    def __init__(self,
+                 Base=default_model_config.Base,
+                 Dist=default_model_config.Dist,
+                 Score=default_model_config.Score,
+                 n_estimators=default_model_config.n_estimators,
+                 learning_rate=default_model_config.learning_rate,
+                 col_sample=default_model_config.col_sample,
+                 minibatch_frac=default_model_config.minibatch_frac,
+                 verbose=default_model_config.verbose,
+                 natural_gradient=default_model_config.natural_gradient,
+                 early_stopping_rounds=default_model_config.early_stopping_rounds, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.Base = Base
+        self.Dist = Dist
+        self.Score = Score
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+        self.col_sample = col_sample
+        self.minibatch_frac = minibatch_frac
+        self.verbose = verbose
+        self.natural_gradient = natural_gradient
+        self.early_stopping_rounds = early_stopping_rounds
+
+    def fit(self, X: np.ndarray, y: np.ndarray, *args, **kwargs):
+        params = {key: getattr(self, key) for key in vars(self)}
+        super().set_params(**params)
+
         X, y = check_X_y(X, y, accept_sparse=True,
                          force_all_finite='allow-nan')
-        super().fit(X, y, **kwargs)
+        super().fit(X, y, *args, **kwargs)
         self.fitted_ = True
-        logger.info('CustomNGBRegressor fitted.')
         return self
 
-    def predict_dist(self, X: np_ndarray):
-        """Predicts the distribution using the fitted model."""
-        logger.info('Predicting distribution using CustomNGBRegressor.')
+    def predict_dist(self, X: np.ndarray):
         check_is_fitted(self, "fitted_")
         X = check_array(X, accept_sparse=True, force_all_finite='allow-nan')
         y_pred_dist = super().pred_dist(X)
-        logger.info('Prediction of distribution completed.')
         return y_pred_dist
 
-    def predict(self, X: np_ndarray):
-        """Predicts using the fitted model."""
-        logger.info('Predicting using CustomNGBRegressor.')
+    def predict(self, X: np.ndarray):
         y_pred_mean = self.predict_dist(X=X).loc
-        logger.info('Prediction completed.')
         return y_pred_mean
 
-    def predict_std(self, X: np_ndarray):
-        """Predicts the standard deviation using the fitted model."""
-        logger.info('Predicting standard deviation using CustomNGBRegressor.')
+    def predict_std(self, X: np.ndarray):
         y_pred_std = self.predict_dist(X=X).scale
-        logger.info('Prediction of standard deviation completed.')
         return y_pred_std
 
     def get_params(self, deep=True):
-        """Gets the parameters of the model.
-
-        Args:
-            deep (bool): Whether to recursively get the parameters.
-
-        Returns:
-            params (dict): The parameters of the model.
-        """
         params = super().get_params(deep=deep)
-        params.update({"config": self.config})
+        model_config_params = {key: getattr(self, key) for key in vars(self)}
+        params.update(model_config_params)
         return params
 
     def set_params(self, **params):
-        """Sets the parameters of the model.
-
-        Args:
-            params (dict): The parameters to set.
-        """
-        self.config = params.pop('config', self.config)
-        return super().set_params(**params)
-
-    @property
-    def base_model(self):
+        super().set_params(**params)
+        for key, value in params.items():
+            setattr(self, key, value)
         return self
 
 
@@ -492,21 +484,16 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
 def create_estimator(model_config: Optional[ModelConfig] = None,
                      X_transformer: Optional[XTransformer] = None,
                      y_transformer: Optional[YTransformer] = None) -> CustomTransformedTargetRegressor:
-
-    def validate_instance(instance, class_, default):
-        if instance is not None and not isinstance(instance, class_):
-            msg = f'Instance must be an instance of {class_.__name__} or None. Got {type(instance)} instead.'
-            logger.error(msg)
-            raise TypeError(msg)
-        return instance or default()
-
     logger.info('Creating estimator with provided configurations.')
 
-    model_config = validate_instance(model_config, ModelConfig, ModelConfig)
-    X_transformer = validate_instance(
-        X_transformer, XTransformer, XTransformer)
-    y_transformer = validate_instance(
-        y_transformer, YTransformer, YTransformer)
+    validate_input(ModelConfig, model_config=model_config)
+    model_config = model_config or ModelConfig()
+
+    validate_input(XTransformer, X_transformer=X_transformer)
+    X_transformer = X_transformer or XTransformer()
+
+    validate_input(YTransformer, y_transformer=y_transformer)
+    y_transformer = y_transformer or YTransformer()
 
     logger.info('Building pipelines.')
 
@@ -514,7 +501,7 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
                           for transformer in X_transformer.transformers])
     pipeline_y = _MultipleTransformer(y_transformer=y_transformer)
 
-    pipeline_steps = [('regressor', CustomNGBRegressor(model_config))]
+    pipeline_steps = [('regressor', CustomNGBRegressor(**vars(model_config)))]
     if X_transformer.transformers:
         logger.info('Building feature pipeline with preprocessor.')
         pipeline_steps.insert(0, ('preprocessor', pipeline_X))

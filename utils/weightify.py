@@ -174,78 +174,33 @@ def dir_weights(config: WeightifyConfig, samples_per_bin: np.ndarray) -> np.ndar
     return weights
 
 
+default_weightify_config = WeightifyConfig()
+
+style_methods = {
+    Style.DIR: dir_weights,
+    Style.INV: inv_weights,
+    Style.SQRT_INV: sqrt_inv_weights,
+    # Style.SPECIAL: special_weights,
+}
+
+
 class Weightify(BaseEstimator, TransformerMixin):
-    def __init__(self, config: Optional[WeightifyConfig] = None) -> None:
-        """
-        Initialize the Weightify transformer.
-        """
-        self.config = None
+    def __init__(self,
+                 style: Style = default_weightify_config.style,
+                 lds_ks: int = default_weightify_config.lds_ks,
+                 lds_sigma: float = default_weightify_config.lds_sigma,
+                 n_bins: int = default_weightify_config.n_bins,
+                 bw_method: Union[float,
+                                  str] = default_weightify_config.bw_method,
+                 beta: float = default_weightify_config.beta):
+        self.style = style
+        self.lds_ks = lds_ks
+        self.lds_sigma = lds_sigma
+        self.n_bins = n_bins
+        self.bw_method = bw_method
+        self.beta = beta
 
-    style_methods = {
-        Style.DIR: dir_weights,
-        Style.INV: inv_weights,
-        Style.SQRT_INV: sqrt_inv_weights,
-        # Style.SPECIAL: special_weights,
-    }
-
-    def set_params(self, **params):
-        """
-        Set the parameters of the Weightify transformer.
-
-        Parameters
-        ----------
-        **params : dict
-            Weightify parameters to set.
-        """
-        self.config = params.pop('config', self.config)
-        return super().set_params(**params)
-
-    def get_params(self, deep=True):
-        """
-        Get the parameters of the Weightify transformer.
-
-        Parameters
-        ----------
-        deep : bool, default=True
-            Unused, here for compatibility with scikit-learn.
-
-        Returns
-        -------
-        params : dict
-            Weightify parameters.
-        """
-        params = super().get_params(deep=deep)
-        params.update({"config": self.config})
-        return params
-
-    def calculate_weights(self, y: np.ndarray, config: WeightifyConfig) -> np.ndarray:
-        """
-        Calculate weights based on the specified style.
-
-        Parameters
-        ----------
-        y : numpy array of shape [n_samples]
-            Input data.
-        config : WeightifyConfig
-            The configuration to use.
-
-        Returns
-        -------
-        weights : numpy array
-            Calculated weights.
-        """
-        if np.all(y == y[0]):
-            return np.full(len(y), 1, dtype=y.dtype)
-        else:
-            kernel = gaussian_kde(y, bw_method=config.bw_method)
-            kernel.set_bandwidth(bw_method=kernel.factor / config.n_bins)
-            samples_per_bin = kernel(y)
-            if config.style == Style.DIR:  # or config.style == Style.SPECIAL:
-                return self.style_methods[config.style](config, samples_per_bin).reshape(y.shape)
-            else:
-                return self.style_methods[config.style](samples_per_bin).reshape(y.shape)
-
-    def fit(self, X: np.ndarray, config: WeightifyConfig, y: Optional[np.ndarray] = None, sub_size: int = 100_000, poly_order: int = 2) -> "Weightify":
+    def fit(self, X: np.ndarray, y=None, sub_size: int = 100_000, poly_order: int = 2):
         """
         Fit the transformer to the input data.
 
@@ -254,8 +209,6 @@ class Weightify(BaseEstimator, TransformerMixin):
         X : numpy array of shape [n_samples,1]
             Input data.
         y : None. Provided for compatibility with scikit-learn.
-        config : WeightifyConfig
-            The configuration to use.
         sub_size : int, default=100_000
             Size of subset to use for polynomial fitting.
         poly_order : int, default=2
@@ -266,24 +219,29 @@ class Weightify(BaseEstimator, TransformerMixin):
         self : Weightify
             The fitted Weightify transformer.
         """
-        self.config = config
-        self.set_params(config=config)
+        config = WeightifyConfig(
+            style=self.style,
+            lds_ks=self.lds_ks,
+            lds_sigma=self.lds_sigma,
+            n_bins=self.n_bins,
+            bw_method=self.bw_method,
+            beta=self.beta
+        )
 
-        X = reshape_to_1d_array(X)
+        # X = reshape_to_1d_array(X)
 
         if sub_size < len(X):
             indices = np.random.permutation(len(X))[:sub_size]
-            y_sub = X[indices]
-            weights_sub = self.calculate_weights(y_sub, config)
+            X_sub = X[indices]
+            weights_sub = self.calculate_weights(X_sub, config)
             self.poly_coeffs_ = np.polyfit(
-                x=y_sub, X=weights_sub, deg=poly_order)
-            del y_sub, weights_sub
+                x=X_sub, y=weights_sub, deg=poly_order)
+            del X_sub, weights_sub
         else:
             weights = self.calculate_weights(X, config)
             self.poly_coeffs_ = np.polyfit(x=X, y=weights, deg=poly_order)
 
         self.fitted_ = True
-
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -301,19 +259,20 @@ class Weightify(BaseEstimator, TransformerMixin):
         sample_weights : numpy array
             Transformed version of the input data.
         """
-        check_is_fitted(self, 'poly_coeffs_')
-        X = reshape_to_1d_array(X)
+
+        check_is_fitted(self, 'fitted_')
 
         poly_order = len(self.poly_coeffs_) - 1
-        transposed_y = np.vstack([X ** (poly_order - i)
+        # X = reshape_to_1d_array(X)
+        transposed_X = np.vstack([X ** (poly_order - i)
                                  for i in range(poly_order + 1)]).T
-        sample_weights = np.dot(transposed_y, self.poly_coeffs_)
+        sample_weights = np.dot(transposed_X, self.poly_coeffs_)
         sample_weights = sample_weights.reshape(X.shape)
         sample_weights = np.clip(sample_weights, 0.1, 10)
 
         return sample_weights
 
-    def fit_transform(self, X: np.ndarray, config: WeightifyConfig, sub_size: int = 100_000, poly_order: int = 2) -> np.ndarray:
+    def fit_transform(self, X: np.ndarray) -> np.ndarray:
         """
         Fit the transformer to the input data and transform it.
 
@@ -321,16 +280,74 @@ class Weightify(BaseEstimator, TransformerMixin):
         ----------
         X : numpy array of shape [n_samples,1]
             Input data.
-        config : WeightifyConfig
-            The configuration to use.
-        sub_size : int, default=100_000
-            Size of subset to use for polynomial fitting.
-        poly_order : int, default=2
-            Order of the polynomial to be estimated.
 
         Returns
         -------
         sample_weights : numpy array
             Transformed version of the input data.
         """
-        return self.fit(X, config, sub_size, poly_order).transform(X)
+        return self.fit(X).transform(X)
+
+    def calculate_weights(self, X: np.ndarray, config: WeightifyConfig) -> np.ndarray:
+        """
+        Calculate weights based on the specified style.
+
+        Parameters
+        ----------
+        X : numpy array of shape [n_samples]
+            Input data.
+        config : WeightifyConfig
+            The configuration to use.
+
+        Returns
+        -------
+        weights : numpy array
+            Calculated weights.
+        """
+
+        X = reshape_to_1d_array(X)
+
+        if np.all(X == X[0]):
+            return np.full(len(X), 1, dtype=X.dtype)
+        else:
+            kernel = gaussian_kde(X, bw_method=config.bw_method)
+            kernel.set_bandwidth(bw_method=kernel.factor / config.n_bins)
+            samples_per_bin = kernel(X)
+            if config.style == Style.DIR:  # or config.style == Style.SPECIAL:
+                return style_methods[config.style](config, samples_per_bin).reshape(X.shape)
+            else:
+                return style_methods[config.style](samples_per_bin).reshape(X.shape)
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the Weightify transformer.
+
+        Parameters
+        ----------
+        **params : dict
+            Weightify parameters to set.
+        """
+        super().set_params(**params)
+        for key, value in params.items():
+            setattr(self, key, value)
+        return self
+
+    def get_params(self, deep=True):
+        """
+        Get the parameters of the Weightify transformer.
+
+        Parameters
+        ----------
+        deep : bool, default=True
+            Unused, here for compatibility with scikit-learn.
+
+        Returns
+        -------
+        params : dict
+            Weightify parameters.
+        """
+        params = super().get_params(deep=deep)
+        weightify_config_params = {
+            key: getattr(self, key) for key in vars(self)}
+        params.update(weightify_config_params)
+        return params

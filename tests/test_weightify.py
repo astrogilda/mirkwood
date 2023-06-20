@@ -7,6 +7,7 @@ import pytest
 import math
 from pydantic import ValidationError
 from utils.validate import check_estimator_compliance
+from utils.custom_transformers_and_estimators import CustomNGBRegressor
 
 # Define a Hypothesis strategy for valid weightify initializers
 valid_weightify_args = st.builds(WeightifyConfig,
@@ -85,8 +86,8 @@ def test_weightify_fit_transform(c, y):
         If the length of transformed weights is not equal to the length of the input array,
         or if any weight is not within the range [0.1, 10].
     """
-    w = Weightify()
-    w.fit(y, config=c)
+    w = Weightify(**vars(c))
+    w.fit(y)
     weights = w.transform(y)
     assert len(weights) == len(y)
     assert all(0.1 <= w <= 10 for w in weights)
@@ -111,10 +112,10 @@ def test_weightify_fit_transform_idempotent(c, y):
     AssertionError
         If the output weights from two fit_transform calls are not close.
     """
-    w = Weightify()
-    w.fit(y, c)
+    w = Weightify(**vars(c))
+    w.fit(y)
     weights1 = w.transform(y)
-    w.fit(y, c)
+    w.fit(y)
     weights2 = w.transform(y)
     # if not np.isnan(weights1).any():
     assert np.allclose(weights1, weights2)
@@ -142,8 +143,8 @@ def test_weightify_transform_after_fit_with_diff_data(c, y):
     z = np.random.rand(len(y))
     z = z.reshape(y.shape)
     z.dtype = y.dtype
-    w = Weightify()
-    w.fit(y, c)
+    w = Weightify(**vars(c))
+    w.fit(y)
     weights_y = w.transform(y)
     weights_z = w.transform(z)
     if not np.array_equal(y, z):
