@@ -1,7 +1,7 @@
 import pytest
 from src.estimator_handler import EstimatorHandler
 from src.model_handler import ModelHandlerConfig
-from utils.custom_transformers_and_estimators import (
+from src.customtransformedtarget_regressor import (
     CustomTransformedTargetRegressor, create_estimator)
 from sklearn.exceptions import NotFittedError
 from pathlib import Path

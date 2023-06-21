@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from src.model_handler import ModelHandler, ModelHandlerConfig
-from src.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
+from handlers.model_handler import ModelHandler, ModelHandlerConfig
+from handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 from pydantic import ValidationError
 from numpy.testing import assert_array_equal
 from multiprocessing import Pool

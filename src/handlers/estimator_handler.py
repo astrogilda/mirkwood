@@ -1,9 +1,9 @@
 import logging
 from joblib import dump, load
 from sklearn.exceptions import NotFittedError
-from utils.custom_transformers_and_estimators import (
+from src.regressors.customtransformedtarget_regressor import (
     CustomTransformedTargetRegressor, create_estimator)
-from src.model_handler import ModelHandlerConfig
+from src.handlers.model_handler import ModelHandlerConfig
 from utils.validate import validate_file_path
 from typing import Dict, Any
 

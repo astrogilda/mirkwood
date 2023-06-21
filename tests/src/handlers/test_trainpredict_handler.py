@@ -1,12 +1,12 @@
 # Suppress all warnings
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.pipeline import Pipeline
-from src.trainpredict_handler import TrainPredictHandler
+from handlers.trainpredict_handler import TrainPredictHandler
 from hypothesis.extra.numpy import arrays
 import pytest
 from hypothesis import given, strategies as st, settings
 import numpy as np
-from src.model_handler import ModelHandler
+from handlers.model_handler import ModelHandler
 from pydantic import ValidationError
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)

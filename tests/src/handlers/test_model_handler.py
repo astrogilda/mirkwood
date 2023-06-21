@@ -6,7 +6,7 @@ import pytest
 from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import NotFittedError
 from src.model_handler import ModelHandler, ModelHandlerConfig
-from utils.custom_transformers_and_estimators import TransformerConfig
+from src.xandy_transformers import TransformerConfig
 from pathlib import Path
 from pydantic import ValidationError
 

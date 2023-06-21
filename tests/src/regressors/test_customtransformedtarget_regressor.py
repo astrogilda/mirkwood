@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 from hypothesis import given, strategies as st, settings
 
-from src.multiple_transformer import MultipleTransformer
-from src.xandy_transformers import XTransformer, YTransformer, TransformerConfig
-from src.customngb_regressor import ModelConfig, CustomNGBRegressor
-from src.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
+from transformers.multiple_transformer import MultipleTransformer
+from transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
+from regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
+from regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
 from utils.weightify import Weightify
 # from utils.validate import *
 # from utils.reshape import *

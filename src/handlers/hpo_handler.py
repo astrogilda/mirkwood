@@ -8,8 +8,10 @@ from optuna.trial import Trial
 from pydantic import BaseModel, Field, conint, validator, confloat
 from typing import Callable, List, Optional, Tuple, Union
 
-from src.model_handler import ModelConfig
-from utils.custom_transformers_and_estimators import XTransformer, YTransformer, CustomTransformedTargetRegressor, create_estimator
+from handlers.model_handler import ModelConfig
+from regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
+from transformers.xandy_transformers import XTransformer, YTransformer
+
 from utils.metrics import ProbabilisticErrorMetrics
 
 import logging

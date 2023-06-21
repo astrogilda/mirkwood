@@ -1,6 +1,6 @@
-from src.data_handler import DataHandler, DataHandlerConfig, GalaxyProperty
+from handlers.data_handler import DataHandler, DataHandlerConfig, GalaxyProperty
 import numpy as np
-from src.postprocessy_transformer import PostProcessY
+from transformers.postprocessy_transformer import PostProcessY
 
 
 def test_postprocessy():

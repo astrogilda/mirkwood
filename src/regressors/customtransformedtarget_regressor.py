@@ -9,11 +9,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted, check_array, check_X_y
 from sklearn.compose import TransformedTargetRegressor
 from utils.weightify import Weightify
-from utils.validate import validate_input, apply_transform_with_checks
+from utils.validate import validate_input
+from utils.transform_with_checks import apply_transform_with_checks
 from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
-from xandy_transformers import XTransformer, YTransformer
-from customngb_regressor import ModelConfig, CustomNGBRegressor
-from src.multiple_transformer import MultipleTransformer
+from transformers.xandy_transformers import XTransformer, YTransformer
+from regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
+from transformers.multiple_transformer import MultipleTransformer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -150,7 +151,8 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         logger.info('Predicting the target variable.')
         check_is_fitted(self, 'regressor_')
         check_is_fitted(self, 'transformer_')
-        assert X.ndim == 2, 'X must be 2d.'
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite=True, ensure_2d=True)
 
         X_trans = apply_transform_with_checks(
             transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
@@ -171,7 +173,8 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         logger.info('Predicting the standard deviation of the target variable.')
         check_is_fitted(self, 'regressor_')
         check_is_fitted(self, 'transformer_')
-        assert X.ndim == 2, 'X must be 2d.'
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite=True, ensure_2d=True)
 
         X_trans = apply_transform_with_checks(
             transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
@@ -234,12 +237,13 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
     logger.info('Creating estimator with provided configurations.')
 
     if model_config is not None:
-        validate_input(ModelConfig, model_config=model_config)
+        pass
+        # validate_input(ModelConfig, model_config=model_config)
     else:
         model_config = ModelConfig()
 
     if X_transformer is not None:
-        validate_input(XTransformer, X_transformer=X_transformer)
+        validate_input(XTransformer, arg=X_transformer)
     else:
         X_transformer = XTransformer()
 

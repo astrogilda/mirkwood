@@ -12,9 +12,11 @@ from typing import Any, Optional, Tuple, List
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
-from utils.custom_transformers_and_estimators import (
-    ModelConfig, XTransformer, YTransformer, create_estimator,
-    CustomTransformedTargetRegressor, PostProcessY)
+from src.customngb_regressor import ModelConfig
+from src.xandy_transformers import XTransformer, YTransformer
+from src.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
+from src.postprocessy_transformer import PostProcessY
+
 from src.data_handler import GalaxyProperty
 import numpy as np
 import shap

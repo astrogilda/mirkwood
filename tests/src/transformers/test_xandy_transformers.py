@@ -6,7 +6,7 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.extra.numpy import arrays
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from utils.reshape import reshape_to_2d_array, reshape_to_1d_array
-from src.xandy_transformers import XTransformer, YTransformer, TransformerConfig
+from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 
 
 @pytest.mark.parametrize(

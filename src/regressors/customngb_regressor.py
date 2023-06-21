@@ -70,18 +70,18 @@ class ModelConfig(BaseModel):
 default_model_config = ModelConfig()
 
 
-class CustomNGBRegressor(NGBRegressor, BaseEstimator, RegressorMixin):
+class CustomNGBRegressor(NGBRegressor):
     def __init__(self,
-                 Base=default_model_config.Base,
-                 Dist=default_model_config.Dist,
-                 Score=default_model_config.Score,
-                 n_estimators=default_model_config.n_estimators,
-                 learning_rate=default_model_config.learning_rate,
-                 col_sample=default_model_config.col_sample,
-                 minibatch_frac=default_model_config.minibatch_frac,
-                 verbose=default_model_config.verbose,
-                 natural_gradient=default_model_config.natural_gradient,
-                 early_stopping_rounds=default_model_config.early_stopping_rounds):
+                 Base=ModelConfig().Base,
+                 Dist=ModelConfig().Dist,
+                 Score=ModelConfig().Score,
+                 n_estimators=ModelConfig().n_estimators,
+                 learning_rate=ModelConfig().learning_rate,
+                 col_sample=ModelConfig().col_sample,
+                 minibatch_frac=ModelConfig().minibatch_frac,
+                 verbose=ModelConfig().verbose,
+                 natural_gradient=ModelConfig().natural_gradient,
+                 early_stopping_rounds=ModelConfig().early_stopping_rounds):
         super().__init__()
         self.Base = Base
         self.Dist = Dist

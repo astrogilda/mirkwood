@@ -7,9 +7,10 @@ from ngboost.scores import LogScore
 from sklearn.preprocessing import FunctionTransformer, StandardScaler, RobustScaler, MinMaxScaler
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.exceptions import NotFittedError
 from pydantic.error_wrappers import ValidationError
 
-from src.customngb_regressor import ModelConfig, CustomNGBRegressor
+from src.regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
 
 
 @st.composite
@@ -132,3 +133,39 @@ def test_customngbregressor_fit_and_predict(arrays):
     preds_std = ngb.predict_std(X)
     assert isinstance(preds_std, np.ndarray)
     assert preds_std.shape[0] == X.shape[0]
+
+
+def test_fit_with_different_sized_X_y():
+    """Test that fit raises a ValueError if X and y have different sizes."""
+    model_config = ModelConfig()
+    ngb = CustomNGBRegressor(**vars(model_config))
+    X = np.random.rand(10, 2)
+    y = np.random.rand(11)
+    with pytest.raises(ValueError):
+        ngb.fit(X, y)
+
+
+def test_predict_before_fit():
+    """Test that predict raises a NotFittedError if called before fit."""
+    model_config = ModelConfig()
+    ngb = CustomNGBRegressor(**vars(model_config))
+    X = np.random.rand(10, 2)
+    with pytest.raises(NotFittedError):
+        ngb.predict(X)
+
+
+@given(array_2d())
+@settings(
+    deadline=None, max_examples=10
+)
+def test_customngbregressor_fit_and_predict_with_pandas_dataframe(X):
+    """Test fitting and predicting with pandas DataFrame."""
+    import pandas as pd
+    X = pd.DataFrame(X)
+    y = pd.Series(np.random.rand(X.shape[0]))
+    model_config = ModelConfig()
+    ngb = CustomNGBRegressor(**vars(model_config))
+    ngb.fit(X, y)
+    preds = ngb.predict(X)
+    assert isinstance(preds, np.ndarray)
+    assert preds.shape[0] == X.shape[0]

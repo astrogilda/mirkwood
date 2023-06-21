@@ -2,7 +2,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
 from typing import Optional, Callable, Dict, Union, Tuple
 from sklearn.base import BaseEstimator, RegressorMixin
-from src.data_handler import GalaxyProperty
+from handlers.data_handler import GalaxyProperty
 from typing import Any, List, Optional, Union, Tuple, Dict, Callable
 from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
 from sklearn.base import BaseEstimator, TransformerMixin, clone

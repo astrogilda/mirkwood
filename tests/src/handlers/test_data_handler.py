@@ -1,4 +1,4 @@
-from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
+from handlers.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
 from hypothesis.strategies import floats, lists, sampled_from, just, one_of
 import pytest
 from hypothesis import given, assume, settings
