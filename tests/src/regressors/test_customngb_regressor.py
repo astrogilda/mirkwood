@@ -1,3 +1,4 @@
+from ngboost import NGBRegressor
 import numpy as np
 import pytest
 from hypothesis import given, strategies as st, settings
@@ -121,8 +122,6 @@ def test_customngbregressor_init():
 def test_customngbregressor_fit_and_predict(arrays):
     """Test fitting and predicting of the CustomNGBRegressor class"""
     y, X = arrays
-    X = np.nan_to_num(X)  # replace infinities with large finite numbers
-    y = np.nan_to_num(y)  # replace infinities with large finite numbers
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.20, random_state=42)
     sample_weight = np.random.uniform(low=0.1, high=1.0, size=X_train.shape[0])
@@ -177,3 +176,30 @@ def test_customngbregressor_fit_and_predict_with_pandas_dataframe(X):
     preds = ngb.predict(X)
     assert isinstance(preds, np.ndarray)
     assert preds.shape[0] == X.shape[0]
+
+
+@given(array_1d_and_2d())
+@settings(
+    deadline=None, max_examples=10
+)
+def test_customngbregressor_compare_with_ngbregressor(arrays):
+    y, X = arrays
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.20, random_state=42)
+
+    model_config = ModelConfig()
+
+    # Fit the base regressor for comparison
+    cngb = CustomNGBRegressor(**vars(model_config))
+    cngb.fit(X_train, y_train)
+    y_pred_cngb = cngb.predict(X_val)
+    y_pred_std_cngb = cngb.predict_std(X_val)
+
+    # Fit the native regressor for comparison
+    ngb = NGBRegressor(**vars(model_config))
+    ngb.fit(X_train, y_train)
+    y_pred_ngb = ngb.pred_dist(X_val).loc
+    y_pred_std_ngb = ngb.pred_dist(X_val).scale
+
+    assert np.allclose(y_pred_cngb, y_pred_ngb, rtol=.4)
+    assert np.allclose(y_pred_std_cngb, y_pred_std_ngb, rtol=.4)

@@ -1,3 +1,4 @@
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.utils.validation import check_array
 from pydantic import BaseModel, Field
 from typing import Union, Optional
@@ -99,6 +100,9 @@ def sqrt_inv_weights(samples_per_bin: np.ndarray) -> np.ndarray:
     return weights
 
 
+EPS = 1e-6
+
+
 def special_weights(config: WeightifyConfig, samples_per_bin: np.ndarray) -> np.ndarray:
     """
     Calculate weights using special style.
@@ -115,14 +119,23 @@ def special_weights(config: WeightifyConfig, samples_per_bin: np.ndarray) -> np.
     weights : numpy array
         Calculated weights.
     """
+    # Create an array of indices
     samples_idx = np.arange(len(samples_per_bin))
-    samples_per_bin = samples_per_bin / samples_per_bin.min()
+    # Normalize the samples_per_bin array by its smallest value. This adjusts the scale of the samples, making the smallest sample equal to 1 and larger samples proportionally larger.
+    samples_per_bin = MinMaxScaler().fit_transform(samples_per_bin.reshape(-1, 1))
+    # samples_per_bin = samples_per_bin / samples_per_bin.min()
+    # Create a new array which is a function of samples_per_bin and config.beta. This operation resembles a decay function where bins with fewer samples have a larger effective number.
     effective_num = 1.0 - np.power(config.beta, samples_per_bin)
+    effective_num += EPS
+    # Calculate weights based on effective_num, setting weight to 0 if effective_num is 0. This ensures bins with more samples (lower effective numbers) get smaller weights and bins with fewer samples get larger weights.
     weights = np.where(effective_num != 0,
                        (1.0 - config.beta) / effective_num, 0)
+    # Normalize the weights such that they sum up to the number of samples. This keeps the total sum of weights consistent regardless of their individual distribution.
     weights = weights / np.sum(weights) * len(samples_per_bin)
+    # Reorder weights according to the original sample indices.
     samples_weights = np.array(
         [weights[i] for i in samples_idx], dtype=samples_per_bin.dtype)
+
     return samples_weights
 
 

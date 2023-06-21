@@ -8,7 +8,7 @@ from typing import List, Optional
 from src.transformers.xandy_transformers import YTransformer, TransformerBase, TransformerConfig
 from utils.transform_with_checks import apply_transform_with_checks
 from utils.validate import validate_input
-from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
+from utils.reshape import reshape_to_1d_array
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
             X = check_array(X, accept_sparse=True,
                             force_all_finite=True, ensure_2d=True)
         else:
-            X, y = check_X_y(X, y, accept_sparse=True,
+            X, y = check_X_y(X, reshape_to_1d_array(y), accept_sparse=True,
                              force_all_finite=True, multi_output=False, ensure_2d=True)
 
         self.transformers_ = []
@@ -64,19 +64,6 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
                 self.transformers_.append(fitted_transformer)
 
         return self
-
-    def transform(self, X: np.ndarray) -> np.ndarray:
-        check_is_fitted(self, 'transformers_')
-        X = check_array(X, accept_sparse=True,
-                        force_all_finite=True, ensure_2d=False)
-        if hasattr(self, "transformers_"):
-            for transformer in self.transformers_:
-                X = apply_transform_with_checks(
-                    transformer=transformer, method_name='transform',
-                    X=X, sanity_check=self.sanity_check)
-            return reshape_to_1d_array(X)
-        else:
-            raise AttributeError("Transformer not fitted")
 
     def fit_transform(self, X: np.ndarray, y: Optional[np.ndarray] = None, **fit_params) -> np.ndarray:
         """
@@ -106,18 +93,31 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
             self.fit(X, y, **fit_params)
             return self.transform(X)
 
-    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
-        check_is_fitted(self, 'transformers_')
+    def transform(self, X: np.ndarray) -> np.ndarray:
         X = check_array(X, accept_sparse=True,
-                        force_all_finite='allow-nan', ensure_2d=False)
-        if hasattr(self, "transformers_"):
+                        force_all_finite=True, ensure_2d=True)
+        if len(self.transformers_) > 0:
+            for transformer in self.transformers_:
+                X = apply_transform_with_checks(
+                    transformer=transformer, method_name='transform',
+                    X=X, sanity_check=self.sanity_check)
+            return X
+        else:
+            logger.info("No transformers found. Acting as a passthrough.")
+            return X
+
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite='allow-nan', ensure_2d=True)
+        if len(self.transformers_) > 0:
             for transformer in reversed(self.transformers_):
                 X = apply_transform_with_checks(
                     transformer=transformer, method_name='inverse_transform',
                     X=X, sanity_check=self.sanity_check)
-            return reshape_to_1d_array(X)
+            return X
         else:
-            raise AttributeError("Transformer not fitted")
+            logger.info("No transformers found. Acting as a passthrough.")
+            return X
 
     def get_params(self, deep=True):
         return {"transformers": self.transformers, "sanity_check": self.sanity_check}

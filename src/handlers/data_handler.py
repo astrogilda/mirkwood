@@ -1,24 +1,22 @@
+from pydantic import root_validator
+import logging
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Union, Callable
 import numpy as np
 import pandas as pd
 
-from pydantic import BaseModel, Field, validator, parse_obj_as
+from pydantic import BaseModel, Field, validator, parse_obj_as, confloat
 
 from enum import Enum
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 
 class TrainData(str, Enum):
     EAGLE = "eagle"
     TNG = "tng"
     SIMBA = "simba"
-
-
-class GalaxyProperty(str, Enum):
-    STELLAR_MASS = "stellar_mass"
-    SFR = "sfr"
-    METALLICITY = "metallicity"
-    DUST_MASS = "dust_mass"
 
 
 class DataSet(BaseModel):
@@ -54,7 +52,19 @@ class DataSet(BaseModel):
         """
         return self.X is not None and self.y is not None
 
-    def load(self) -> None:
+    def __str__(self):
+        return f'DataSet {self.name}: Loaded={self.is_loaded}'
+
+
+class DataLoader:
+    """
+    Class to load datasets from disk.
+    """
+
+    def __init__(self, simulation_path: str):
+        self.simulation_path = simulation_path
+
+    def load(self, dataset: DataSet) -> None:
         """
         Load the dataset from disk.
 
@@ -63,21 +73,17 @@ class DataSet(BaseModel):
         FileNotFoundError
             If the files 'X.pkl' or 'y.pkl' cannot be found.
         """
-        if not self.is_loaded:
-
-            base_path = Path.cwd()
-            simulations_path = base_path.joinpath('Simulations')
-            path = simulations_path.joinpath(self.name).resolve()
+        if not dataset.is_loaded:
+            path = Path(self.simulation_path).joinpath(dataset.name).resolve()
 
             try:
-                self.X = pd.read_pickle(path.joinpath('X.pkl'))
-                self.y = pd.read_pickle(path.joinpath('y.pkl'))
+                dataset.X = pd.read_pickle(path.joinpath('X.pkl'))
+                dataset.y = pd.read_pickle(path.joinpath('y.pkl'))
+                logging.info(f"Successfully loaded data from {path}")
 
             except FileNotFoundError as e:
+                logging.error(f"Error loading data from {path}: {e}")
                 raise FileNotFoundError(f"Error loading data from {path}: {e}")
-
-    def __str__(self):
-        return f'DataSet {self.name}: Loaded={self.is_loaded}'
 
 
 class DataHandlerConfig(BaseModel):
@@ -88,44 +94,31 @@ class DataHandlerConfig(BaseModel):
     ----------
     mulfac : float
         Multiplicative factor applied to the X matrix.
-    train_data : List[str]
-        List of datasets to be used for training.
     datasets : Dict[str, DataSet]
         Available datasets.
     """
+    mulfac: float = Field(
+        1.0, gt=0.0, le=10.0, description="Multiplicative factor applied to the X matrix.")
+    datasets: Dict[str, DataSet] = Field(default_factory=dict)
+    simulation_path: str = Field(default=Path.cwd().joinpath('Simulations'))
 
-    mulfac: float = 1.0
-    datasets: Dict[str, DataSet] = Field(
-        default_factory=lambda: {
-            'simba': DataSet(name='simba'),
-            'eagle': DataSet(name='eagle'),
-            'tng': DataSet(name='tng'),
-        }
-    )
-
-    @validator("mulfac")
-    def _check_mulfac(cls, value: float) -> float:
-        """
-        Validate the mulfac attribute.
-
-        Parameters
-        ----------
-        value : float
-            Value to be validated.
-
-        Returns
-        -------
-        float
-            Validated value.
-
-        Raises
-        ------
-        ValueError
-            If value is not greater than zero.
-        """
-        if value <= 0:
-            raise ValueError("mulfac should be greater than zero")
-        return value
+    @root_validator
+    def check_datasets(cls, values):
+        datasets = values.get('datasets', {})
+        if not datasets:
+            # If datasets is empty, populate with default datasets
+            datasets = {
+                TrainData.EAGLE.name: DataSet(name=TrainData.EAGLE.value),
+                TrainData.SIMBA.name: DataSet(name=TrainData.SIMBA.value),
+                TrainData.TNG.name: DataSet(name=TrainData.TNG.value)
+            }
+        else:
+            # Check if all keys in user-provided dict are valid
+            for name in datasets.keys():
+                if name not in TrainData.__members__:
+                    raise ValueError(f'invalid dataset name: {name}')
+        values['datasets'] = datasets
+        return values
 
 
 class DataHandler:
@@ -138,17 +131,29 @@ class DataHandler:
         Configuration for the data handler.
     """
 
-    def __init__(self, config: DataHandlerConfig = DataHandlerConfig()):
-        self.config = config
+    def __init__(self, config: Optional[DataHandlerConfig] = None):
+        if config is None:
+            self.config = DataHandlerConfig(datasets={
+                TrainData.EAGLE.value: DataSet(name=TrainData.EAGLE.value),
+                TrainData.SIMBA.value: DataSet(name=TrainData.SIMBA.value),
+                TrainData.TNG.value: DataSet(name=TrainData.TNG.value)
+            })
+        else:
+            self.config = config
 
-    def get_data(self, train_data: Union[List[TrainData], TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
+        self.datasets = self.config.datasets
+        self.loader = DataLoader(
+            simulation_path=self.config.simulation_path)
+        self.mulfac = self.config.mulfac
+
+    def get_data(self, train_data: List[TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Load and preprocess datasets.
 
         Parameters
         ----------
-        train_data : List[str] or str
-            List of datasets (or solitary dataset) to be used for training.
+        train_data : List[str]
+            List of datasets to be used for training.
 
         Returns
         -------
@@ -158,16 +163,13 @@ class DataHandler:
         if not train_data:
             raise ValueError("No datasets specified for loading.")
 
-        if isinstance(train_data, TrainData):
-            train_data = [train_data]
-
         X_list, y_list = [], []
 
         # Load and concatenate datasets
         for key in train_data:
-            dataset = self.config.datasets[key.value]
+            dataset = self.config.datasets[key.name]
             if not dataset.is_loaded:
-                dataset.load()
+                self.loader.load(dataset)
             X_list.append(dataset.X)
             y_list.append(dataset.y)
 

@@ -15,7 +15,7 @@ from utils.validate import check_estimator_compliance
 from src.regressors.customngb_regressor import CustomNGBRegressor
 from src.handlers.processy_handler import ProcessYHandler
 from src.transformers.multiple_transformer import MultipleTransformer
-from utils.weightify import Weightify, WeightifyConfig, Style
+from utils.weightify import Weightify, WeightifyConfig, Style, inv_weights, sqrt_inv_weights, special_weights, dir_weights
 
 # Define a Hypothesis strategy for valid weightify initializers
 valid_weightify_args = st.builds(WeightifyConfig,
@@ -251,3 +251,19 @@ def test_weightify_params(params):
     # Test that model can fit and predict with different parameters
     predictions = ttregressor.predict(X)
     assert predictions.shape == y.shape
+
+
+@given(samples_per_bin=st.lists(st.floats(min_value=0.0001, max_value=1000), min_size=10, max_size=100))
+def test_inv_weights(samples_per_bin):
+    weights = inv_weights(np.array(samples_per_bin))
+    assert len(weights) == len(samples_per_bin)
+    assert weights.sum() == len(samples_per_bin)
+    assert all(weight > 0 for weight in weights)
+
+
+@given(samples_per_bin=st.lists(st.floats(min_value=0.0001, max_value=1000), min_size=10, max_size=100))
+def test_sqrt_inv_weights(samples_per_bin):
+    weights = sqrt_inv_weights(np.array(samples_per_bin))
+    assert len(weights) == len(samples_per_bin)
+    assert weights.sum() == len(samples_per_bin)
+    assert all(weight > 0 for weight in weights)

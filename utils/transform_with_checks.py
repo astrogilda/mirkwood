@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import inspect
 from utils.validate import is_estimator_fitted
-
+from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 logger = logging.getLogger(__name__)
 
 
@@ -45,12 +45,13 @@ def apply_transform_with_checks(
 
     if y is not None:
         y = check_array(y, ensure_2d=False, force_all_finite=True)
-        X, y = check_X_y(X, y, accept_sparse=True, force_all_finite=True)
+        X, y = check_X_y(X, reshape_to_1d_array(
+            y), accept_sparse=True, force_all_finite=True)
     if 'y_val' in kwargs:
         kwargs['y_val'] = check_array(
             kwargs['y_val'], ensure_2d=False, force_all_finite=True)
         kwargs['X_val'], kwargs['y_val'] = check_X_y(
-            kwargs['X_val'], kwargs['y_val'], accept_sparse=True, force_all_finite=True)
+            kwargs['X_val'], reshape_to_1d_array(kwargs['y_val']), accept_sparse=True, force_all_finite=True)
 
     if 'sample_weight' in kwargs:
         kwargs['sample_weight'] = check_array(

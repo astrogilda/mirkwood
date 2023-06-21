@@ -67,7 +67,7 @@ class Normal(RegressionDistn):
     def __init__(self, params):
         super().__init__(params)
         self.loc = params[0]
-        # Sankalp: adding the clipping line on 10/16/2020.
+        # Sankalp Gilda: added the clipping line on 10/16/2020.
         params[1] = np.clip(params[1], a_min=-1e1, a_max=1e1)
         self.scale = np.exp(params[1])
         self.var = self.scale**2
@@ -75,7 +75,8 @@ class Normal(RegressionDistn):
 
     def fit(Y):
         m, s = sp.stats.norm.fit(Y)
-        return np.array([m, np.log(s)])
+        # Sankalp Gilda: added a small number to avoid log(0) error. 06/21/2023
+        return np.array([m, np.log(s + 1e-8)])
 
     def sample(self, m):
         return np.array([self.rvs() for i in range(m)])

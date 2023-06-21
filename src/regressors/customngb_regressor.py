@@ -117,8 +117,9 @@ class CustomNGBRegressor(NGBRegressor):
         params = {key: getattr(self, key) for key in vars(self)}
         super().set_params(**params)
 
+        y = reshape_to_1d_array(y)
         X, y = check_X_y(X, y, accept_sparse=True,
-                         force_all_finite='allow-nan')
+                         force_all_finite=True, ensure_2d=True, y_numeric=True)
 
         # NGBoost is weird in that it names the y_val argument as Y_val
         if 'y_val' in kwargs:
@@ -130,7 +131,8 @@ class CustomNGBRegressor(NGBRegressor):
 
     def predict_dist(self, X: np.ndarray):
         check_is_fitted(self, "fitted_")
-        X = check_array(X, accept_sparse=True, force_all_finite='allow-nan')
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite=True, ensure_2d=True)
         y_pred_dist = super().pred_dist(X)
         return y_pred_dist
 

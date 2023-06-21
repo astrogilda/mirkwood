@@ -1,4 +1,3 @@
-from handlers.data_handler import GalaxyProperty
 from pydantic import BaseModel, Field, validator, root_validator
 from sklearn.utils import check_X_y
 from typing import Optional, List, Tuple, Any, Dict
@@ -9,14 +8,15 @@ import scipy.stats as stats
 import pandas as pd
 import logging
 
-from handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
-from handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
-from handlers.data_handler import GalaxyProperty, DataHandler
-from handlers.hpo_handler import HPOHandler, HPOHandlerConfig
-from utils.custom_cv import CustomCV
+from src.handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
+from src.handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
+from src.handlers.data_handler import DataHandler
+from src.handlers.processy_handler import GalaxyProperty
+from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import create_estimator
 from utils.metrics import calculate_z_score
+from utils.custom_cv import CustomCV
 
 
 class TrainPredictHandlerConfig(BaseModel):

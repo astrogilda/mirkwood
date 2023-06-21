@@ -18,7 +18,7 @@ from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
 from src.handlers.processy_handler import ProcessYHandler
 
-from handlers.data_handler import GalaxyProperty
+from handlers.processy_handler import GalaxyProperty
 import numpy as np
 import shap
 from sklearn.utils.validation import check_array

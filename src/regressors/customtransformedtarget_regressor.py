@@ -97,26 +97,28 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         """
         logger.info('Fitting the CustomTransformedTargetRegressor.')
 
-        X, y = check_X_y(X, y, accept_sparse=True,
-                         force_all_finite=True, y_numeric=True)
+        X, y = check_X_y(X, reshape_to_1d_array(
+            y), accept_sparse=True, force_all_finite=True, y_numeric=True)
 
         X_val = fit_params.pop("X_val", None)
         y_val = fit_params.pop("y_val", None)
 
         if X_val is not None and y_val is not None:
-            X_val, y_val = check_X_y(
-                X_val, y_val, accept_sparse=True, force_all_finite=True, y_numeric=True)
+            X_val, y_val = check_X_y(X_val, reshape_to_1d_array(
+                y_val), accept_sparse=True, force_all_finite=True, y_numeric=True)
 
         weight_flag = fit_params.pop("weight_flag", False)
         sanity_check = fit_params.pop("sanity_check", False)
 
+        self.transformer_ = clone(self.transformer)
+
         # self.transformer, y = apply_transform_with_checks(
         #    transformer=self.transformer, method_name='fit_transform', X=reshape_to_2d_array(y), #sanity_check=sanity_check)
-        self.transformer = apply_transform_with_checks(
-            transformer=self.transformer, method_name='fit', X=reshape_to_2d_array(y), sanity_check=sanity_check)
+        self.transformer_ = apply_transform_with_checks(
+            transformer=self.transformer_, method_name='fit', X=reshape_to_2d_array(y), sanity_check=sanity_check)
         y = apply_transform_with_checks(
-            transformer=self.transformer, method_name='transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
-        y_val = apply_transform_with_checks(transformer=self.transformer, method_name='transform',
+            transformer=self.transformer_, method_name='transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
+        y_val = apply_transform_with_checks(transformer=self.transformer_, method_name='transform',
                                             X=reshape_to_2d_array(y_val), sanity_check=sanity_check) if y_val is not None else None
         # y and y_val are 2d
 
@@ -133,8 +135,6 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
             fit_params["sample_weight"] = train_weights
         if "val_sample_weight" not in fit_params:
             fit_params["val_sample_weight"] = val_weights
-
-        self.transformer_ = clone(self.transformer)
 
         self.regressor_ = clone(self.regressor)
 
@@ -163,11 +163,12 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         X = check_array(X, accept_sparse=True,
                         force_all_finite=True, ensure_2d=True)
 
-        X_trans = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
-        # X_trans is 2d
+        if 'preprocessor' in self.regressor_.named_steps:
+            X = apply_transform_with_checks(
+                transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
+            # X is 2d
         y_pred_mean = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X_trans, sanity_check=sanity_check)
+            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X, sanity_check=sanity_check)
         # y_pred_mean can be 1d or 2d, I don't know
         y_pred_mean = apply_transform_with_checks(
             transformer=self.transformer_, method_name='inverse_transform', X=reshape_to_2d_array(y_pred_mean), sanity_check=sanity_check)
@@ -185,14 +186,15 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         X = check_array(X, accept_sparse=True,
                         force_all_finite=True, ensure_2d=True)
 
-        X_trans = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
-        # X_trans is 2d
+        if 'preprocessor' in self.regressor_.named_steps:
+            X = apply_transform_with_checks(
+                transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
+            # X is 2d
         y_pred_mean = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X_trans, sanity_check=sanity_check)
+            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X, sanity_check=sanity_check)
         # y_pred_mean can be 1d or 2d, I don't know
         y_pred_std = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict_std', X=X_trans, sanity_check=sanity_check)
+            transformer=self.regressor_.named_steps['regressor'], method_name='predict_std', X=X, sanity_check=sanity_check)
         # y_pred_std can be 1d or 2d, I don't know
 
         y_pred_upper = y_pred_mean + y_pred_std
@@ -268,16 +270,16 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
 
     logger.info('Building pipelines.')
 
-    pipeline_X = Pipeline([(transformer.name, transformer.transformer)
-                          for transformer in X_transformer.transformers])
-    pipeline_y = MultipleTransformer(**vars(y_transformer))
-
     pipeline_steps = [('regressor', CustomNGBRegressor(**vars(model_config)))]
     if X_transformer.transformers:
         logger.info('Building feature pipeline with preprocessor.')
+        pipeline_X = Pipeline([(transformer.name, transformer.transformer)
+                               for transformer in X_transformer.transformers])
         pipeline_steps.insert(0, ('preprocessor', pipeline_X))
 
     feature_pipeline = Pipeline(pipeline_steps)
+
+    pipeline_y = MultipleTransformer(**vars(y_transformer))
 
     ctt_regressor = CustomTransformedTargetRegressor(
         regressor=feature_pipeline,

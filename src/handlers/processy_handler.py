@@ -5,12 +5,18 @@ import numpy as np
 from sklearn.preprocessing import FunctionTransformer
 from typing import Optional, Union, Tuple, Dict, Callable, Type
 
-from src.handlers.data_handler import GalaxyProperty
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 EPS = 1e-6
+
+
+class GalaxyProperty(str, Enum):
+    STELLAR_MASS = "stellar_mass"
+    SFR = "sfr"
+    METALLICITY = "metallicity"
+    DUST_MASS = "dust_mass"
 
 
 def get_label_transform_func() -> Dict[str, Tuple[Callable, Callable]]:
