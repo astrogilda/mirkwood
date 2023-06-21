@@ -3,9 +3,10 @@ import pytest
 from hypothesis import given, strategies as st, settings
 from sklearn.datasets import load_diabetes
 from sklearn.model_selection import train_test_split
-from src.hpo_handler import HPOHandler, HPOHandlerConfig, ParamGridConfig, crps_scorer
 import optuna
+
 from utils.custom_cv import CustomCV
+from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig, ParamGridConfig, crps_scorer
 
 # Common function for most tests
 

@@ -1,19 +1,15 @@
 import numpy as np
 import pytest
 from hypothesis import given, strategies as st, settings
-
-from transformers.multiple_transformer import MultipleTransformer
-from transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
-from regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
-from regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
-from utils.weightify import Weightify
-# from utils.validate import *
-# from utils.reshape import *
-# from utils.resample import *
-
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.pipeline import Pipeline
+
+from src.transformers.multiple_transformer import MultipleTransformer
+from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
+from src.regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
+from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
+from utils.weightify import Weightify
 
 
 @st.composite
@@ -102,10 +98,13 @@ def test_create_estimator_None(arrays):
         X, y, test_size=0.20, random_state=42)
 
     ttr = create_estimator(None, None, None)
+    # Check if estimator is successfully created
     assert isinstance(ttr, CustomTransformedTargetRegressor)
 
     ttr.fit(X_train, y_train, X_val=X_val, y_val=y_val,
             weight_flag=False, sanity_check=True)
+    # Check if fitting is successful
+    assert ttr.regressor_ is not None
     y_pred = ttr.predict(X)
     # Check shape of predicted y
     assert y_pred.shape == y.flatten().shape
@@ -149,7 +148,7 @@ def test_custom_transformed_target_regressor(arrays):
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                           for transformer in X_transformer.transformers])
-    pipeline_y = MultipleTransformer(y_transformer=y_transformer)
+    pipeline_y = MultipleTransformer(**vars(y_transformer))
     feature_pipeline = Pipeline([
         ('preprocessor', pipeline_X),
         ('regressor', ngb)

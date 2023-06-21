@@ -10,8 +10,8 @@ from utils.custom_transformers_and_estimators import TransformerTuple, Transform
 from ngboost import NGBRegressor
 from utils.weightify import Weightify
 
-from src.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
-from src.model_handler import ModelConfig
+from handlers.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
+from handlers.model_handler import ModelConfig
 from hypothesis.strategies import floats, lists, sampled_from, just, one_of
 import pytest
 from hypothesis import given, assume, settings

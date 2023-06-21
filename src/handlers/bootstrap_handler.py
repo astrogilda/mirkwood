@@ -1,10 +1,11 @@
 from typing import Tuple
 from pydantic import BaseModel, Field
-from src.model_handler import ModelHandler
-from utils.resample import Resampler, ResamplerConfig
-from utils.reshape import reshape_to_2d_array
 import numpy as np
 import logging
+
+from src.handlers.model_handler import ModelHandler
+from utils.resample import Resampler, ResamplerConfig
+from utils.reshape import reshape_to_2d_array
 
 # Set up logging
 logger = logging.getLogger(__name__)

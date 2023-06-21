@@ -1,4 +1,3 @@
-from handlers.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
 from hypothesis.strategies import floats, lists, sampled_from, just, one_of
 import pytest
 from hypothesis import given, assume, settings
@@ -6,6 +5,8 @@ from pydantic import ValidationError
 import numpy as np
 from typing import List
 import pandas as pd
+
+from src.handlers.data_handler import DataHandler, DataHandlerConfig, DataSet, TrainData, GalaxyProperty
 
 
 @given(mulfac=floats(min_value=0.0, exclude_min=True))

@@ -2,7 +2,6 @@
 from sklearn.utils.validation import check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.base import BaseEstimator, RegressorMixin
-from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 from typing import Any, List, Optional, Union, Tuple, Dict, Callable
 from sklearn.tree import DecisionTreeRegressor
 from pydantic import BaseModel, Field, validator, root_validator, conint, confloat
@@ -13,6 +12,8 @@ from sklearn.base import BaseEstimator, TransformerMixin, clone
 from ngboost import NGBRegressor
 import numpy as np
 import logging
+
+from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -118,7 +119,12 @@ class CustomNGBRegressor(NGBRegressor):
 
         X, y = check_X_y(X, y, accept_sparse=True,
                          force_all_finite='allow-nan')
+
+        # NGBoost is weird in that it names the y_val argument as Y_val
+        if 'y_val' in kwargs:
+            kwargs['Y_val'] = kwargs.pop('y_val')
         super().fit(X, y, *args, **kwargs)
+
         self.fitted_ = True
         return self
 

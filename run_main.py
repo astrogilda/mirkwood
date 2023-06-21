@@ -1,8 +1,8 @@
-from src.bootstrap_handler import BootstrapHandler
-from src.model_handler import ModelHandler
-from src.trainpredict_handler import TrainPredictHandler
+from handlers.bootstrap_handler import BootstrapHandler
+from handlers.model_handler import ModelHandler
+from handlers.trainpredict_handler import TrainPredictHandler
 from functools import partial
-from src.data_handler import DataHandler, DataHandlerConfig, TrainData
+from handlers.data_handler import DataHandler, DataHandlerConfig, TrainData
 from utils.custom_cv import CustomCV
 
 

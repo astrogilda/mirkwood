@@ -1,14 +1,16 @@
 # Suppress all warnings
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.pipeline import Pipeline
-from handlers.trainpredict_handler import TrainPredictHandler
 from hypothesis.extra.numpy import arrays
 import pytest
 from hypothesis import given, strategies as st, settings
 import numpy as np
-from handlers.model_handler import ModelHandler
 from pydantic import ValidationError
 import warnings
+
+from src.handlers.trainpredict_handler import TrainPredictHandler
+from src.handlers.model_handler import ModelHandler
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Define the strategies for generating valid input data

@@ -9,8 +9,8 @@ import pytest
 from pathlib import Path
 from sklearn.exceptions import NotFittedError
 from sklearn.ensemble import RandomForestRegressor
-from src.shap_handler import ShapHandler
-from src.model_handler import ModelHandlerConfig
+from src.handlers.shap_handler import ShapHandler
+from src.handlers.model_handler import ModelHandlerConfig
 import shap
 import logging
 from sklearn.base import BaseEstimator

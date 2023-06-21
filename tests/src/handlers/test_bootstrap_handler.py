@@ -1,13 +1,13 @@
 import pytest
 import numpy as np
-from handlers.model_handler import ModelHandler, ModelHandlerConfig
-from handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 from pydantic import ValidationError
 from numpy.testing import assert_array_equal
 from multiprocessing import Pool
 import random
 import string
 from utils.metrics import ProbabilisticErrorMetrics, DeterministicErrorMetrics, calculate_z_score
+from src.handlers.model_handler import ModelHandler, ModelHandlerConfig
+from src.handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 
 
 def generate_data(n_samples: int, n_features: int):

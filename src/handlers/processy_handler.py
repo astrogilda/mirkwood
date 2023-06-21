@@ -4,6 +4,7 @@ from sklearn.utils.validation import check_array, check_is_fitted
 import numpy as np
 from sklearn.preprocessing import FunctionTransformer
 from typing import Optional, Union, Tuple, Dict, Callable, Type
+
 from src.handlers.data_handler import GalaxyProperty
 
 logging.basicConfig(level=logging.INFO)

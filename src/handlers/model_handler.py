@@ -10,14 +10,15 @@ from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 from typing import Any, Optional, Tuple, List
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
-from src.customngb_regressor import ModelConfig
-from src.xandy_transformers import XTransformer, YTransformer
-from src.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
-from src.postprocessy_transformer import PostProcessY
+from src.regressors.customngb_regressor import ModelConfig
+from src.transformers.xandy_transformers import XTransformer, YTransformer
+from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
+from src.handlers.processy_handler import ProcessYHandler
 
-from src.data_handler import GalaxyProperty
+from handlers.data_handler import GalaxyProperty
 import numpy as np
 import shap
 from sklearn.utils.validation import check_array
@@ -122,8 +123,8 @@ class ModelHandler:
     def __init__(self, config: ModelHandlerConfig) -> None:
 
         self._config = config
-        from src.estimator_handler import EstimatorHandler
-        from src.shap_handler import ShapHandler
+        from handlers.estimator_handler import EstimatorHandler
+        from handlers.shap_handler import ShapHandler
 
         self._estimator_handler = EstimatorHandler(config)
         self._shap_handler = ShapHandler(config)
@@ -162,7 +163,7 @@ class ModelHandler:
         """
         validate_input(np.ndarray, arg1=X_test)
         y_pred = self._predict_with_estimator(X_test)
-        y_pred_mean, y_pred_std = PostProcessY(prop=self._config.galaxy_property).transform(
+        y_pred_mean, y_pred_std = ProcessYHandler(prop=self._config.galaxy_property).transform(
             y_pred)
         return y_pred_mean, y_pred_std
 

@@ -2,7 +2,7 @@ import logging
 from joblib import dump, load
 from sklearn.exceptions import NotFittedError
 from shap import Explainer, TreeExplainer
-from src.model_handler import ModelHandlerConfig
+from src.handlers.model_handler import ModelHandlerConfig
 from utils.validate import validate_file_path, is_estimator_fitted
 from sklearn.base import BaseEstimator
 import numpy as np

@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import NotFittedError
-from src.model_handler import ModelHandler, ModelHandlerConfig
-from src.xandy_transformers import TransformerConfig
+from src.handlers.model_handler import ModelHandler, ModelHandlerConfig
+from src.transformers.xandy_transformers import TransformerConfig
 from pathlib import Path
 from pydantic import ValidationError
 

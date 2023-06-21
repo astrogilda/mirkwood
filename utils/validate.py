@@ -105,6 +105,8 @@ def is_estimator_fitted(estimator: Any) -> bool:
         "class_count_", "class_prior_", "n_features_",  # naive bayes
         "theta_", "sigma_",  # gaussian naive bayes
         "fitted_", "is_fitted_",  # CustomNGBRegressor
+        "regressor_", "transformer_",  # CustomTransformedTargetRegressor
+        "transformers_",  # MultipleTransformer
         "transformers_", "n_features_in_", "n_features_out_",  # transformers
         "n_samples_seen_", "scale_", "var_", "mean_",  # scalers
         "n_features_", "n_outputs_", "n_input_features_",  # feature selectors

@@ -3,11 +3,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
 import numpy as np
 import logging
+from typing import List, Optional
+
 from src.transformers.xandy_transformers import YTransformer, TransformerBase, TransformerConfig
 from utils.transform_with_checks import apply_transform_with_checks
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
-from typing import List, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
         self.transformers = transformers if transformers is not None else []
         self.sanity_check = sanity_check
 
-    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "MultipleTransformer":
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None, **fit_params) -> "MultipleTransformer":
         validate_input(list, transformers=self.transformers)
         validate_input(bool, sanity_check=self.sanity_check)
 
@@ -76,6 +77,34 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
             return X
         else:
             raise AttributeError("Transformer not fitted")
+
+    def fit_transform(self, X: np.ndarray, y: Optional[np.ndarray] = None, **fit_params) -> np.ndarray:
+        """
+        Fit to data, then transform it.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data to fit_transform
+        y : Optional[np.ndarray]
+            Target data to fit_transform
+        fit_params : dict
+            Optional parameters to use during fitting.
+
+        Returns
+        -------
+        X_new : np.ndarray
+            Transformed array.
+        """
+
+        if y is None:
+            # Fit and transform the data.
+            self.fit(X, **fit_params)
+            return self.transform(X)
+        else:
+            # Fit and transform the data.
+            self.fit(X, y, **fit_params)
+            return self.transform(X)
 
     def inverse_transform(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, 'transformers_')

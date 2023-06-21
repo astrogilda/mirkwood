@@ -9,6 +9,7 @@ from scipy.ndimage import convolve1d, gaussian_filter1d
 import numpy as np
 from sklearn.utils.validation import check_is_fitted
 from sklearn.base import clone
+
 from utils.reshape import reshape_to_1d_array
 
 

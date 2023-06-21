@@ -40,9 +40,9 @@ from utils.metrics import *
 from sedpy.observate import load_filters
 
 from utils.weightify import Weightify
-from src.data_handler import DataHandler, CustomCVConfig, DataHandlerConfig
-from src.model_handler import ModelHandler, ModelHandlerConfig
-from src.bootstrap_handler import BootstrapHandler
+from handlers.data_handler import DataHandler, CustomCVConfig, DataHandlerConfig
+from handlers.model_handler import ModelHandler, ModelHandlerConfig
+from handlers.bootstrap_handler import BootstrapHandler
 from functools import partial
 
 from matplotlib import pyplot as plt

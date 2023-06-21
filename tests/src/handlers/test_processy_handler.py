@@ -1,7 +1,8 @@
 import pytest
+import numpy as np
+
 from src.handlers.data_handler import GalaxyProperty
 from src.handlers.processy_handler import ProcessYHandler
-import numpy as np
 
 
 def test_processy_stellar_mass():
