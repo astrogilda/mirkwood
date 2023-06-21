@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.preprocessing import FunctionTransformer
 from typing import Optional, Union, Tuple, Dict, Callable, Type
 
+from enum import Enum
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
