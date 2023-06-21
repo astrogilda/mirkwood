@@ -261,7 +261,7 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
 
     pipeline_X = Pipeline([(transformer.name, transformer.transformer)
                           for transformer in X_transformer.transformers])
-    pipeline_y = MultipleTransformer(y_transformer=y_transformer)
+    pipeline_y = MultipleTransformer(**vars(y_transformer))
 
     pipeline_steps = [('regressor', CustomNGBRegressor(**vars(model_config)))]
     if X_transformer.transformers:

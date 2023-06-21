@@ -69,7 +69,11 @@ def test_model_config_defaults():
     assert config.minibatch_frac == 1.0
     assert config.verbose is False
     assert config.natural_gradient is True
-    assert config.early_stopping_rounds is None
+    assert config.early_stopping_rounds == 10
+    assert config.verbose_eval == 10
+    assert config.tol == 1e-4
+    assert config.random_state == 1
+    assert config.validation_fraction == .1
 
 
 def test_invalid_model_config():
@@ -103,7 +107,11 @@ def test_customngbregressor_init():
     assert ngb.minibatch_frac == 1.0
     assert ngb.verbose is False
     assert ngb.natural_gradient is True
-    assert ngb.early_stopping_rounds is None
+    assert ngb.early_stopping_rounds == 10
+    assert ngb.verbose_eval == 10
+    assert ngb.tol == 1e-4
+    assert ngb.random_state == 1
+    assert ngb.validation_fraction == .1
 
 
 @given(array_1d_and_2d())

@@ -47,10 +47,20 @@ class ModelConfig(BaseModel):
         default=1.0,
         description="The minibatch fraction for NGBRegressor. Must be greater than 0 and less than or equal to 1."
     )
-    verbose: bool = False
-    natural_gradient: bool = True
+    verbose: bool = Field(
+        False, description=" Flag indicating whether output should be printed during fitting")
+    natural_gradient: bool = Field(
+        True, description="Flag indicating whether to use natural gradient")
     early_stopping_rounds: Optional[conint(gt=0)] = Field(
-        default=None, description="Early stopping rounds for NGBRegressor")
+        default=10, description="Early stopping rounds for NGBRegressor")
+    verbose_eval: conint(gt=0) = Field(
+        10, description="Increment (in boosting iterations) at which output should be printed")
+    tol: confloat(gt=0, le=1e-2) = Field(1e-4,
+                                         description="Numerical tolerance to be used in optimization")
+    random_state: conint(gt=0, lt=2**32-1) = Field(
+        1, description="Seed for reproducibility. See https://stackoverflow.com/questions/28064634/random-state-pseudo-random-number-in-scikit-learn")
+    validation_fraction: confloat(gt=0, le=1) = Field(
+        0.1, description="Proportion of training data to set aside as validation data for early stopping")
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -81,7 +91,11 @@ class CustomNGBRegressor(NGBRegressor):
                  minibatch_frac=ModelConfig().minibatch_frac,
                  verbose=ModelConfig().verbose,
                  natural_gradient=ModelConfig().natural_gradient,
-                 early_stopping_rounds=ModelConfig().early_stopping_rounds):
+                 early_stopping_rounds=ModelConfig().early_stopping_rounds,
+                 verbose_eval=ModelConfig().verbose_eval,
+                 tol=ModelConfig().tol,
+                 random_state=ModelConfig().random_state,
+                 validation_fraction=ModelConfig().validation_fraction):
         super().__init__()
         self.Base = Base
         self.Dist = Dist
@@ -93,6 +107,10 @@ class CustomNGBRegressor(NGBRegressor):
         self.verbose = verbose
         self.natural_gradient = natural_gradient
         self.early_stopping_rounds = early_stopping_rounds
+        self.verbose_eval = verbose_eval
+        self.tol = tol
+        self.random_state = random_state
+        self.validation_fraction = validation_fraction
 
     def fit(self, X: np.ndarray, y: np.ndarray, *args, **kwargs):
         params = {key: getattr(self, key) for key in vars(self)}
