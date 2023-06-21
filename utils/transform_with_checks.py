@@ -39,7 +39,7 @@ def apply_transform_with_checks(
                       for param in kwargs if param in method_params}
 
     X = check_array(X, ensure_2d=True, allow_nd=False, force_all_finite=True)
-    if 'X_val' in kwargs:
+    if 'X_val' in kwargs and kwargs['X_val'] is not None:
         kwargs['X_val'] = check_array(
             kwargs['X_val'], ensure_2d=True, allow_nd=False, force_all_finite=True)
 
@@ -47,16 +47,16 @@ def apply_transform_with_checks(
         y = check_array(y, ensure_2d=False, force_all_finite=True)
         X, y = check_X_y(X, reshape_to_1d_array(
             y), accept_sparse=True, force_all_finite=True)
-    if 'y_val' in kwargs:
+    if 'y_val' in kwargs and kwargs['y_val'] is not None:
         kwargs['y_val'] = check_array(
             kwargs['y_val'], ensure_2d=False, force_all_finite=True)
         kwargs['X_val'], kwargs['y_val'] = check_X_y(
             kwargs['X_val'], reshape_to_1d_array(kwargs['y_val']), accept_sparse=True, force_all_finite=True)
 
-    if 'sample_weight' in kwargs:
+    if 'sample_weight' in kwargs and kwargs['sample_weight'] is not None:
         kwargs['sample_weight'] = check_array(
             kwargs['sample_weight'], ensure_2d=False, force_all_finite=True)
-    if 'val_sample_weight' in kwargs:
+    if 'val_sample_weight' in kwargs and kwargs['val_sample_weight'] is not None:
         kwargs['val_sample_weight'] = check_array(
             kwargs['val_sample_weight'], ensure_2d=False, force_all_finite=True)
 
