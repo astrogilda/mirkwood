@@ -10,6 +10,9 @@ from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 from typing import Any, Optional, Tuple, List
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+import numpy as np
+import shap
+from sklearn.utils.validation import check_array
 
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
@@ -17,11 +20,7 @@ from src.regressors.customngb_regressor import ModelConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
 from src.handlers.processy_handler import ProcessYHandler
-
-from handlers.processy_handler import GalaxyProperty
-import numpy as np
-import shap
-from sklearn.utils.validation import check_array
+from src.handlers.processy_handler import GalaxyProperty
 
 # Suppress deprecation warnings
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
@@ -51,8 +50,8 @@ class ModelHandlerConfig(BaseModel):
     shap_file_path: Optional[Path] = None
     shap_values_path: Optional[Path] = None
     model_config: ModelConfig = ModelConfig()
-    X_transformer: XTransformer = XTransformer()
-    y_transformer: YTransformer = YTransformer()
+    X_transformer: dict = dict(XTransformer(transformers=None))
+    y_transformer: dict = dict(YTransformer(transformers=None))
     precreated_estimator: Optional[CustomTransformedTargetRegressor] = None
     precreated_explainer: Optional[shap.TreeExplainer] = None
 
