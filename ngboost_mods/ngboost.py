@@ -313,27 +313,28 @@ class NGBoost:
             )
 
         # if early stopping is specified, split X,Y and sample weights (if given) into training and validation sets
-        # This will overwrite any X_val and Y_val values passed by the user directly.
+        # Modified by Sankalp Gilda on 06/21/2023, to allow for early stopping with provided validation set. If the user provides `early_stopping_rounds` (defaults to 10 in ModelConfig), and X_val and y_val are non-empty, then they should be used in the fit method. If on the other hand X_val and y_val are empty, then NGBoost creates a `validation_fraction` (defaults to 0.1 in ModelConfig) of the training data to use as validation data.
         if self.early_stopping_rounds is not None:
 
             early_stopping_rounds = self.early_stopping_rounds
 
-            if sample_weight is None:
-                X, X_val, Y, Y_val = train_test_split(
-                    X,
-                    Y,
-                    test_size=self.validation_fraction,
-                    random_state=self.random_state,
-                )
+            if X_val is None and Y_val is None:
+                if sample_weight is None:
+                    X, X_val, Y, Y_val = train_test_split(
+                        X,
+                        Y,
+                        test_size=self.validation_fraction,
+                        random_state=self.random_state,
+                    )
 
-            else:
-                X, X_val, Y, Y_val, sample_weight, val_sample_weight = train_test_split(
-                    X,
-                    Y,
-                    sample_weight,
-                    test_size=self.validation_fraction,
-                    random_state=self.random_state,
-                )
+                else:
+                    X, X_val, Y, Y_val, sample_weight, val_sample_weight = train_test_split(
+                        X,
+                        Y,
+                        sample_weight,
+                        test_size=self.validation_fraction,
+                        random_state=self.random_state,
+                    )
 
         if Y is None:
             raise ValueError("y cannot be None")

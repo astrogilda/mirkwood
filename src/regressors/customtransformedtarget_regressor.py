@@ -110,8 +110,12 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         weight_flag = fit_params.pop("weight_flag", False)
         sanity_check = fit_params.pop("sanity_check", False)
 
-        self.transformer, y = apply_transform_with_checks(
-            transformer=self.transformer, method_name='fit_transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
+        # self.transformer, y = apply_transform_with_checks(
+        #    transformer=self.transformer, method_name='fit_transform', X=reshape_to_2d_array(y), #sanity_check=sanity_check)
+        self.transformer = apply_transform_with_checks(
+            transformer=self.transformer, method_name='fit', X=reshape_to_2d_array(y), sanity_check=sanity_check)
+        y = apply_transform_with_checks(
+            transformer=self.transformer, method_name='transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
         y_val = apply_transform_with_checks(transformer=self.transformer, method_name='transform',
                                             X=reshape_to_2d_array(y_val), sanity_check=sanity_check) if y_val is not None else None
         # y and y_val are 2d

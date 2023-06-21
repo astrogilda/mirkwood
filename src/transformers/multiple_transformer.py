@@ -74,7 +74,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
                 X = apply_transform_with_checks(
                     transformer=transformer, method_name='transform',
                     X=X, sanity_check=self.sanity_check)
-            return X
+            return reshape_to_1d_array(X)
         else:
             raise AttributeError("Transformer not fitted")
 
@@ -115,7 +115,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
                 X = apply_transform_with_checks(
                     transformer=transformer, method_name='inverse_transform',
                     X=X, sanity_check=self.sanity_check)
-            return X
+            return reshape_to_1d_array(X)
         else:
             raise AttributeError("Transformer not fitted")
 

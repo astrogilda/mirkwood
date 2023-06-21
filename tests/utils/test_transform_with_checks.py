@@ -90,7 +90,7 @@ def test_apply_transform_with_checks_sanity_check(X):
 def test_apply_transform_with_checks_fail_transform(X):
     """Test failed transformation exception."""
     transformer = LinearRegression()  # Not a transformer
-    with pytest.raises(AttributeError, match=r".*has no attribute 'transform'.*"):
+    with pytest.raises(AttributeError, match=r".*does not have a method called transform.*"):
         apply_transform_with_checks(transformer, 'transform', X)
 
 
@@ -129,7 +129,7 @@ def test_apply_transform_with_checks_edge_case_single_feature(X):
 @settings(deadline=None, max_examples=1)
 def test_apply_transform_with_checks_none_transformer(X):
     """Test with None as transformer."""
-    with pytest.raises(AttributeError, match=r"'NoneType' object has no attribute 'fit_transform'"):
+    with pytest.raises(AttributeError, match=r"NoneType does not have a method called fit_transform"):
         apply_transform_with_checks(None, 'fit_transform', X)
 
 
@@ -142,7 +142,7 @@ def test_apply_transform_with_checks_missing_fit_method(X):
             return X * 2
 
     transformer = BadTransformer()
-    with pytest.raises(AttributeError, match=r".*has no attribute 'fit_transform'.*"):
+    with pytest.raises(AttributeError, match=r".*does not have a method called fit_transform.*"):
         apply_transform_with_checks(transformer, 'fit_transform', X)
 
 
@@ -155,7 +155,7 @@ def test_apply_transform_with_checks_missing_transform_method(X):
             return self
 
     transformer = BadTransformer()
-    with pytest.raises(AttributeError, match=r".*has no attribute 'transform'.*"):
+    with pytest.raises(AttributeError, match=r".*does not have a method called transform.*"):
         apply_transform_with_checks(transformer, 'transform', X)
 
 
@@ -244,3 +244,47 @@ def test_apply_transform_with_checks_val_sample_weights_provided(X, val_sample_w
         transformer, 'fit_transform', X, val_sample_weight=val_sample_weight)
     assert isinstance(result, np.ndarray)
     assert result.shape == X.shape
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks_predict_method(X):
+    """Test successful prediction with LinearRegression."""
+    transformer = LinearRegression().fit(X, np.random.rand(X.shape[0]))
+    result = apply_transform_with_checks(
+        transformer, 'predict', X)
+    assert isinstance(result, np.ndarray)
+    assert result.shape[0] == X.shape[0]
+
+
+@given(array_2d())
+@settings(deadline=None, max_examples=1)
+def test_apply_transform_with_checks_invalid_transformer_method(X):
+    """Test transformer that doesn't have a predict_std method."""
+    transformer = StandardScaler().fit(X)
+    with pytest.raises(AttributeError, match=r".*does not have a method called predict_std.*"):
+        apply_transform_with_checks(transformer, 'predict_std', X)
+
+
+@given(array_1d_and_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks_y_and_sample_weight_provided(arrays):
+    """Test successful transformation when y and sample weight are provided."""
+    y, X = arrays
+    sample_weight = np.random.rand(y.shape[0])
+    transformer = LinearRegression()
+    transformer = apply_transform_with_checks(
+        transformer, 'fit', X, y=y, sample_weight=sample_weight)
+    assert isinstance(transformer, BaseEstimator)
+
+
+@given(array_1d_and_2d(), array_1d_and_2d())
+@settings(deadline=None, max_examples=10)
+def test_apply_transform_with_checks_val_data_and_y_val_provided(arrays, val_arrays):
+    """Test successful transformation when validation data and y_val are provided."""
+    y, X = arrays
+    y_val, X_val = val_arrays
+    transformer = LinearRegression()
+    transformer = apply_transform_with_checks(
+        transformer, 'fit', X, y, X_val=X_val, y_val=y_val)
+    assert isinstance(transformer, BaseEstimator)
