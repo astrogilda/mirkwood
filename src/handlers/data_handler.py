@@ -86,10 +86,6 @@ class DataHandlerConfig(BaseModel):
 
     Attributes
     ----------
-    np_seed : int
-        Seed for the numpy random generator.
-    eps : float
-        Small value used to avoid division by zero or log of zero.
     mulfac : float
         Multiplicative factor applied to the X matrix.
     train_data : List[str]
@@ -98,8 +94,6 @@ class DataHandlerConfig(BaseModel):
         Available datasets.
     """
 
-    np_seed: int = 1
-    eps: float = 1e-6
     mulfac: float = 1.0
     datasets: Dict[str, DataSet] = Field(
         default_factory=lambda: {
@@ -146,27 +140,6 @@ class DataHandler:
 
     def __init__(self, config: DataHandlerConfig = DataHandlerConfig()):
         self.config = config
-        np.random.seed(self.config.np_seed)
-
-    '''
-    @property
-    def inverse_transforms(self) -> Dict[str, Callable[[np.ndarray], np.ndarray]]:
-        return {
-            'log_stellar_mass': self.label_rev_func()[GalaxyProperty.STELLAR_MASS],
-            'log_dust_mass': self.label_rev_func()[GalaxyProperty.DUST_MASS],
-            'log_metallicity': self.label_rev_func()[GalaxyProperty.METALLICITY],
-            'log_sfr': self.label_rev_func()[GalaxyProperty.SFR],
-        }
-
-
-    @staticmethod
-    def label_rev_func():
-        return {GalaxyProperty.STELLAR_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)),
-                GalaxyProperty.DUST_MASS: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=20)) - 1,
-                GalaxyProperty.METALLICITY: lambda x: np.float_power(10, np.clip(x, a_min=-1e1, a_max=1e1)),
-                GalaxyProperty.SFR: lambda x: np.float_power(10, np.clip(x, a_min=0, a_max=1e2)) - 1,
-                }
-    '''
 
     def get_data(self, train_data: Union[List[TrainData], TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
         """
@@ -201,42 +174,4 @@ class DataHandler:
         X = pd.concat(X_list, axis=0).reset_index(drop=True)
         y = pd.concat(y_list, axis=0).reset_index(drop=True)
 
-        y = self.preprocess_y(y)
         return X * self.config.mulfac, y
-
-    def preprocess_y(self, y: pd.DataFrame) -> np.ndarray:
-        """
-        Preprocess the y vector.
-
-        Parameters
-        ----------
-        y : pd.DataFrame
-            Raw y vector.
-
-        Returns
-        -------
-        np.ndarray
-            Preprocessed y vector.
-        """
-        log_stellar_mass = np.log10(
-            y[GalaxyProperty.STELLAR_MASS].values + self.config.eps)  # .reshape(-1, 1)
-        log_dust_mass = np.log10(
-            1 + y[GalaxyProperty.DUST_MASS].values)  # .reshape(-1, 1)
-        log_metallicity = np.log10(
-            y[GalaxyProperty.METALLICITY].values)  # .reshape(-1, 1)
-        log_sfr = np.log10(1 + y[GalaxyProperty.SFR].values)  # .reshape(-1, 1)
-
-        dtype = np.dtype([
-            ('log_stellar_mass', float),
-            ('log_dust_mass', float),
-            ('log_metallicity', float),
-            ('log_sfr', float),
-        ])
-
-        y_array = np.empty(len(y), dtype=dtype)
-        y_array['log_stellar_mass'] = log_stellar_mass
-        y_array['log_dust_mass'] = log_dust_mass
-        y_array['log_metallicity'] = log_metallicity
-        y_array['log_sfr'] = log_sfr
-
-        return y_array
