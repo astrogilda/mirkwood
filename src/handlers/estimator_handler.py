@@ -3,6 +3,7 @@ from joblib import dump, load
 from sklearn.exceptions import NotFittedError
 from typing import Dict, Any
 import numpy as np
+from sklearn.utils import check_X_y
 
 from src.regressors.customtransformedtarget_regressor import (
     CustomTransformedTargetRegressor, create_estimator)
@@ -88,6 +89,13 @@ class EstimatorHandler:
         if fit_params.get('y_val') is not None:
             fit_params['y_val'] = self._convert_to_new_scale(
                 fit_params['y_val'])
+
+        # temporary, following a trace
+        print(f"galaxy property: {self._config.galaxy_property}")
+        X_train, y_train = self._config.X_train, self._config.y_train
+        X_train, y_train = check_X_y(
+            X_train, y_train, ensure_2d=True, y_numeric=True, force_all_finite=True)
+        self._config.X_train, self._config.y_train = X_train, y_train
 
         self.estimator.fit(self._config.X_train,
                            self._config.y_train, **fit_params)

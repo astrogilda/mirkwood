@@ -10,7 +10,7 @@ from enum import Enum
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-EPS = 1e-6
+EPS = 1e-8
 
 
 class GalaxyProperty(str, Enum):
@@ -108,7 +108,7 @@ class ProcessYHandler:
             If X is complex or non-numeric data.
         """
         X = check_array(X, accept_sparse=True,
-                        force_all_finite=False, ensure_2d=False)
+                        force_all_finite=True, ensure_2d=False)
 
         if np.iscomplexobj(X):
             raise ValueError("Complex data not supported")
@@ -121,6 +121,11 @@ class ProcessYHandler:
             raise ValueError(f"Invalid prop value: '{self.prop}'")
 
         self.prop = GalaxyProperty(self.prop) if self.prop else None
+
+        if self.prop is not None and (X <= 0).any():
+            raise ValueError(
+                "All elements of X must be non-negative when prop is specified.")
+
         self.is_fitted_ = True
 
     def transform(self, X: np.ndarray):

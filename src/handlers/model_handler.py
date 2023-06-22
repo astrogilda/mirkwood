@@ -12,7 +12,7 @@ from typing import Any, Optional, Tuple, List, Union
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 import numpy as np
 import shap
-from sklearn.utils.validation import check_array
+from sklearn.utils.validation import check_array, check_X_y
 
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
@@ -126,8 +126,8 @@ class ModelHandler:
     def __init__(self, config: ModelHandlerConfig) -> None:
 
         self._config = config
-        from handlers.estimator_handler import EstimatorHandler
-        from handlers.shap_handler import ShapHandler
+        from src.handlers.estimator_handler import EstimatorHandler
+        from src.handlers.shap_handler import ShapHandler
 
         self._estimator_handler = EstimatorHandler(config)
         self._shap_handler = ShapHandler(config)

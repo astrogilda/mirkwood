@@ -2,6 +2,7 @@ from typing import Tuple
 from pydantic import BaseModel, Field
 import numpy as np
 import logging
+from sklearn.utils import check_X_y
 
 from src.handlers.model_handler import ModelHandler
 from utils.resample import Resampler, ResamplerConfig
@@ -54,6 +55,11 @@ class BootstrapHandler():
             ResamplerConfig(
                 frac_samples=self.bootstrap_config.frac_samples, seed=seed, replace=self.bootstrap_config.replace)
         ).resample_data([self.model_handler._config.X_train, self.model_handler._config.y_train])
+
+        X_ib, y_ib = check_X_y(
+            X_ib, y_ib, force_all_finite=True, y_numeric=True)
+        X_oob, y_oob = check_X_y(
+            X_oob, y_oob, force_all_finite=True, y_numeric=True)
 
         self.model_handler._config.X_train = X_ib
         self.model_handler._config.y_train = y_ib
