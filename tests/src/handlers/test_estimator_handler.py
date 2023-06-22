@@ -133,3 +133,65 @@ def test_fit_with_validation_data(dummy_estimator_handler):
     validation_data_estimator_handler = EstimatorHandler(config)
     validation_data_estimator_handler.fit()
     assert validation_data_estimator_handler.is_fitted
+
+
+def test_incompatible_X_train_y_train(dummy_estimator_handler):
+    dummy_estimator_handler._config.y_train = np.array([1, 2, 3, 4])
+    with pytest.raises(ValueError):
+        dummy_estimator_handler.fit()
+
+
+def test_incompatible_X_val_y_val(dummy_estimator_handler):
+    dummy_estimator_handler._config.X_val = np.array([[1, 2, 3]])
+    dummy_estimator_handler._config.y_val = np.array([1, 2])
+    with pytest.raises(ValueError):
+        dummy_estimator_handler.fit()
+
+
+def test_invalid_model_config(dummy_estimator_handler):
+    """This won't fail becuase `create_estimator` will call ModelConfig() if model_config is None."""
+    dummy_estimator_handler._config.model_config = None
+    dummy_estimator_handler.fit()
+
+
+def test_none_transformer(dummy_estimator_handler):
+    """This won't fail becuase `create_estimator` will call XTransformer() if X_transformer is None."""
+    dummy_estimator_handler._config.X_transformer = None
+    dummy_estimator_handler.fit()
+
+
+def test_fit_twice(dummy_estimator_handler):
+    """This won't fail because model will discard previously fitted estimator and refit, in keeping with sklearn functionality."""
+    dummy_estimator_handler.fit()
+    dummy_estimator_handler.fit()
+
+
+def test_invalid_galaxy_property(dummy_estimator_handler):
+    """This won't fail because ProcessYHandler will function as passthrough if galaxy_property is None."""
+    dummy_estimator_handler._config.galaxy_property = None
+    dummy_estimator_handler.fit()
+
+
+def test_convert_to_new_scale_before_fit(dummy_estimator_handler):
+    """This won't fail because _convert_to_new_scale does not require the model to be fitted; it is meerely a nice way to access ProcessYHandler."""
+    dummy_estimator_handler._convert_to_new_scale(
+        dummy_estimator_handler._config.y_train)
+
+
+def test_save_estimator_no_permissions(dummy_estimator_handler):
+    file_path = Path("/root/non_writable_file.joblib")
+    dummy_estimator_handler._config.file_path = file_path
+    with pytest.raises(OSError, match="Read-only file system: '/root'"):
+        dummy_estimator_handler.fit()
+
+
+def test_estimator_access_before_creation(dummy_estimator_handler):
+    with pytest.raises(NotFittedError):
+        _ = dummy_estimator_handler.estimator
+
+
+def test_filepath_is_directory(dummy_estimator_handler):
+    file_path = Path("/Users/sankalpgilda")
+    dummy_estimator_handler._config.file_path = file_path
+    with pytest.raises(IsADirectoryError, match=f"Expected a file but got a directory: {file_path}"):
+        dummy_estimator_handler.fit()

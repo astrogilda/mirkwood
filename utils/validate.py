@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 EPS = 1e-6
 
 
+logger = logging.getLogger(__name__)
+
+
 def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
     """
     Validates a file path based on the fitting mode. 
@@ -28,14 +31,21 @@ def validate_file_path(file_path: Optional[Path], fitting_mode: bool) -> None:
 
     Args:
         file_path: File path to validate.
-        fitting_mode: If True, checks that the parent directory of the file path exists.
+        fitting_mode: If True, checks that the parent directory of the file path exists and file_path is not a directory.
                       If False, checks that the file at the provided file path exists.
     """
+
+    # Path.is_file() will return False both when the path doesn't exist and when the path is a directory, so the order of the conditions is important here.
+
     if file_path is None:
         return
 
     if fitting_mode:
-        if not file_path.parent.exists():
+        if file_path.is_dir():
+            error_msg = f"Expected a file but got a directory: {file_path}"
+            logger.error(error_msg)
+            raise IsADirectoryError(error_msg)
+        elif not file_path.parent.exists():
             logger.warning(
                 f"The directory {file_path.parent} does not exist. Creating it now.")
             try:

@@ -16,6 +16,7 @@ from sklearn.utils.validation import check_array
 
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
+from utils.weightify import Weightify
 from src.regressors.customngb_regressor import ModelConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
@@ -29,6 +30,8 @@ warnings.filterwarnings("ignore", category=NumbaPendingDeprecationWarning)
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# TODO: more robust way to handle assignment of new X_transformer, y_transformer, of weightifier, after modelhandlerconfig has been instantiated. so one can continue to leverage pydantic's validations
 
 
 class ModelHandlerConfig(BaseModel):
@@ -52,6 +55,7 @@ class ModelHandlerConfig(BaseModel):
     model_config: ModelConfig = ModelConfig()
     X_transformer: XTransformer = XTransformer(transformers=None)
     y_transformer: YTransformer = YTransformer(transformers=None)
+    weightifier: Weightify = Weightify()
     precreated_estimator: Optional[CustomTransformedTargetRegressor] = None
     precreated_explainer: Optional[shap.TreeExplainer] = None
 
@@ -161,9 +165,8 @@ class ModelHandler:
             Tuple of arrays: predicted target variable and uncertainty.
         """
         validate_input(np.ndarray, arg1=X_test)
-        y_pred = self._predict_with_estimator(X_test)
-        y_pred_mean, y_pred_std = ProcessYHandler(prop=self._config.galaxy_property).transform(
-            y_pred)
+        y_pred_mean, y_pred_std = self._predict_with_estimator(X_test)
+
         return y_pred_mean, y_pred_std
 
     def create_explainer(self) -> None:
@@ -216,11 +219,11 @@ class ModelHandler:
         y_pred = self.estimator.predict(X)
         y_pred_std = self.estimator.predict_std(X)
 
-        if self._config.galaxy_property is not None:
-            y_pred, y_pred_std = self._convert_to_original_scale(
-                y_pred, y_pred_std)
+        # if self._config.galaxy_property is not None:
+        y_pred, y_pred_std = self._convert_to_original_scale(
+            y_pred, y_pred_std)
 
-        return reshape_to_1d_array(y_pred), reshape_to_1d_array(y_pred_std)
+        return reshape_to_1d_array(y_pred), reshape_to_1d_array(y_pred_std) if y_pred_std is not None else None
 
     def _convert_to_original_scale(self, predicted_mean: ndarray, predicted_std: Optional[ndarray]) -> Tuple[ndarray, Optional[ndarray]]:
         """
@@ -231,5 +234,7 @@ class ModelHandler:
         Returns:
             Tuple of arrays: converted predicted mean values and standard deviations.
         """
-        post_processor = PostProcessY(self._config.galaxy_property)
-        return post_processor.transform(predicted_mean), post_processor.transform(predicted_std) if predicted_std is not None else None
+        prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
+        post_processor = ProcessYHandler(prop)
+        post_processor.fit(predicted_mean)
+        return post_processor.inverse_transform(predicted_mean), post_processor.inverse_transform(predicted_std) if predicted_std is not None else None
