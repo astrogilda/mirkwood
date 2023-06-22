@@ -58,8 +58,6 @@ class BootstrapHandler():
 
         X_ib, y_ib = check_X_y(
             X_ib, y_ib, force_all_finite=True, y_numeric=True)
-        X_oob, y_oob = check_X_y(
-            X_oob, y_oob, force_all_finite=True, y_numeric=True)
 
         self.model_handler._config.X_train = X_ib
         self.model_handler._config.y_train = y_ib

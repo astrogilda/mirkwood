@@ -22,7 +22,7 @@ def generate_data(n_samples: int, n_features: int):
 X_train, y_train, feature_names = generate_data(50, 20)
 X_val, y_val, _ = generate_data(30, 20)
 model_handler_config = ModelHandlerConfig(X_train=X_train, y_train=y_train,
-                                          X_val=X_val, y_val=y_val, feature_names=feature_names)
+                                          X_val=X_val, y_val=y_val, feature_names=feature_names, galaxy_property=None)
 model_handler = ModelHandler(model_handler_config)
 
 
@@ -52,7 +52,7 @@ def test_bootstrap_with_different_frac_samples(frac_samples, X, y):
     feature_names = [''.join(random.choices(string.ascii_letters + string.digits, k=10))
                      for _ in range(20)]
     model_handler_config = ModelHandlerConfig(
-        X_train=X, y_train=y, X_val=X, y_val=y, feature_names=feature_names)
+        X_train=X, y_train=y, X_val=X, y_val=y, feature_names=feature_names, galaxy_property=None)
     model_handler = ModelHandler(model_handler_config)
     bootstrap_config = BootstrapHandlerConfig(frac_samples=frac_samples)
     bootstrap_handler = BootstrapHandler(
@@ -157,7 +157,7 @@ def test_bootstrap_non_random_data(data):
     feature_names = [''.join(np.random.choice(list('abcdefghij'), size=10))
                      for _ in range(20)]
     model_handler_config = ModelHandlerConfig(X_train=X_train, y_train=y_train,
-                                              X_val=X_val, y_val=y_val, feature_names=feature_names)
+                                              X_val=X_val, y_val=y_val, feature_names=feature_names, galaxy_property=None)
     model_handler = ModelHandler(config=model_handler_config)
     bootstrap_config = BootstrapHandlerConfig(frac_samples=0.8)
     bootstrap_handler = BootstrapHandler(
