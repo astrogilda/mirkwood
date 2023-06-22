@@ -10,8 +10,25 @@ from utils.transform_with_checks import apply_transform_with_checks
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
 
-logging.basicConfig(level=logging.INFO)
+# Create a custom logger
 logger = logging.getLogger(__name__)
+# This removes all handlers from the logger object, if any exist.
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+# prevent log events from being passed to the root logger
+logger.propagate = False
+# Set level of logging
+logger.setLevel(logging.INFO)
+# Create handlers
+handler = logging.FileHandler('multistep_transformer.log')
+handler.setLevel(logging.INFO)
+# Create formatters and add it to handlers
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+# Add handlers to the logger
+logger.addHandler(handler)
+
 
 EPS = 1e-6
 
@@ -60,9 +77,10 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
                     raise ValueError("Invalid transformer configuration.")
                 fitted_transformer = apply_transform_with_checks(
                     transformer=transformer_config.transformer, method_name='fit',
-                    X=X, y=y, sanity_check=self.sanity_check)
+                    X=X, y=y, sanity_check=self.sanity_check, **fit_params)
                 self.transformers_.append(fitted_transformer)
 
+        self.fitted_ = True
         return self
 
     def fit_transform(self, X: np.ndarray, y: Optional[np.ndarray] = None, **fit_params) -> np.ndarray:
@@ -94,6 +112,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
             return self.transform(X)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
+        check_is_fitted(self, 'fitted_')
         X = check_array(X, accept_sparse=True,
                         force_all_finite=True, ensure_2d=True)
         if len(self.transformers_) > 0:
@@ -107,6 +126,7 @@ class MultipleTransformer(BaseEstimator, TransformerMixin):
             return X
 
     def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        check_is_fitted(self, 'fitted_')
         X = check_array(X, accept_sparse=True,
                         force_all_finite='allow-nan', ensure_2d=True)
         if len(self.transformers_) > 0:

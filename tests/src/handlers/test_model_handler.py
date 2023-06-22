@@ -5,10 +5,11 @@ import numpy as np
 import pytest
 from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import NotFittedError
-from src.handlers.model_handler import ModelHandler, ModelHandlerConfig
-from src.transformers.xandy_transformers import TransformerConfig
 from pathlib import Path
 from pydantic import ValidationError
+
+from src.handlers.model_handler import ModelHandler, ModelHandlerConfig
+from src.transformers.xandy_transformers import TransformerConfig
 
 FEATURE_NAMES = [''.join(random.choices(
     string.ascii_letters + string.digits, k=10)) for _ in range(3)]

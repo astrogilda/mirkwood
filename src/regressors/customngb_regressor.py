@@ -37,7 +37,7 @@ class ModelConfig(BaseModel):
     n_estimators: conint(gt=0) = Field(
         default=500, description="Number of estimators for NGBRegressor")
     learning_rate: confloat(gt=0, le=1) = Field(
-        default=0.04,
+        default=0.01,
         description="The learning rate for the NGBRegressor. Must be greater than 0 and less than or equal to 1."
     )
     col_sample: confloat(gt=0, le=1) = Field(
@@ -74,6 +74,7 @@ class ModelConfig(BaseModel):
             min_samples_leaf=1,
             min_weight_fraction_leaf=0.0,
             max_leaf_nodes=31,
+            max_depth=3,
             splitter='best'
         )
 
@@ -129,7 +130,7 @@ class CustomNGBRegressor(NGBRegressor):
         self.fitted_ = True
         return self
 
-    def predict_dist(self, X: np.ndarray):
+    def pred_dist(self, X: np.ndarray):
         check_is_fitted(self, "fitted_")
         X = check_array(X, accept_sparse=True,
                         force_all_finite=True, ensure_2d=True)
@@ -137,11 +138,11 @@ class CustomNGBRegressor(NGBRegressor):
         return y_pred_dist
 
     def predict(self, X: np.ndarray):
-        y_pred_mean = self.predict_dist(X=X).loc
+        y_pred_mean = self.pred_dist(X=X).loc
         return y_pred_mean
 
     def predict_std(self, X: np.ndarray):
-        y_pred_std = self.predict_dist(X=X).scale
+        y_pred_std = self.pred_dist(X=X).scale
         return y_pred_std
 
     def get_params(self, deep=True):

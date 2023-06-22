@@ -43,6 +43,10 @@ class ParamGridConfig(BaseModel):
         100, 1000)
     regressor__regressor__minibatch_frac: optuna.distributions.BaseDistribution = optuna.distributions.FloatDistribution(
         0.1, 1.0)
+    regressor__regressor__Base__max_depth: optuna.distributions.BaseDistribution = optuna.distributions.IntDistribution(
+        1, 10)
+    regressor__regressor__Base__max_leaf_nodes: optuna.distributions.BaseDistribution = optuna.distributions.IntDistribution(
+        20, 100)
 
     class Config:
         arbitrary_types_allowed: bool = True

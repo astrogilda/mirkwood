@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, root_validator
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
-from typing import Any, Optional, Tuple, List
+from typing import Any, Optional, Tuple, List, Union
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 import numpy as np
 import shap
@@ -50,8 +50,8 @@ class ModelHandlerConfig(BaseModel):
     shap_file_path: Optional[Path] = None
     shap_values_path: Optional[Path] = None
     model_config: ModelConfig = ModelConfig()
-    X_transformer: dict = dict(XTransformer(transformers=None))
-    y_transformer: dict = dict(YTransformer(transformers=None))
+    X_transformer: XTransformer = XTransformer(transformers=None)
+    y_transformer: YTransformer = YTransformer(transformers=None)
     precreated_estimator: Optional[CustomTransformedTargetRegressor] = None
     precreated_explainer: Optional[shap.TreeExplainer] = None
 

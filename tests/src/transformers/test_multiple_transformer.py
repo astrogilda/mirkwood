@@ -127,15 +127,15 @@ def test_multiple_transformer(X):
 
 # Edge cases
 
-
-def test_multiple_transformer_empty_y_transformer():
+@settings(deadline=None)
+@given(array_2d())
+def test_multiple_transformer_empty_y_transformer(X):
     """Test MultipleTransformer's response to an empty YTransformer"""
     y_transformer = YTransformer(transformers=[])
     multi_trans = MultipleTransformer(**vars(y_transformer))
     # Expecting no exceptions here as the transformer list is empty but valid
-    multi_trans.fit(np.array([[1, 2], [3, 4]]))
+    multi_trans.fit(X)
     # Check that the transformation is a passthrough
-    X = np.array([5, 6, 7, 8])
     X_trans = multi_trans.transform(X)
     assert np.array_equal(X, X_trans)
     logger.info("MultipleTransformer handled empty YTransformer. Test Passed.")

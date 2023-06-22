@@ -8,6 +8,7 @@ from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted, check_array, check_X_y
 from sklearn.compose import TransformedTargetRegressor
+from ngboost import NGBRegressor
 
 from utils.weightify import Weightify
 from utils.validate import validate_input
@@ -16,6 +17,8 @@ from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customngb_regressor import ModelConfig, CustomNGBRegressor
 from src.transformers.multiple_transformer import MultipleTransformer
+
+from scipy.stats import norm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,17 +42,8 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
         self.regressor = regressor
         self.transformer = transformer
         self.weightifier = weightifier or Weightify()
-
-    '''
-    def _calculate_weights(self, y_train: np.ndarray, y_val: Optional[np.ndarray] = None) -> np.ndarray:
-        if self.weightifier is None:
-            return None
-        else:
-            y = y_train if y_val is None else np.concatenate([y_train, y_val])
-            weights = apply_transform_with_checks(
-                transformer=self.weightifier, method_name='transform', X=reshape_to_2d_array(y))
-            return weights
-    '''
+        self._cached_X = None
+        self._cached_samples = None
 
     def _calculate_weights(self, y_train: np.ndarray, y_val: Optional[np.ndarray] = None, weight_flag: bool = False) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
@@ -72,30 +66,15 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
             val_weights = np.ones_like(y_val) if y_val is not None else None
         return reshape_to_1d_array(train_weights), reshape_to_1d_array(val_weights) if val_weights is not None else None
 
-    '''
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray, X_val: Optional[np.ndarray] = None,
-            y_val: Optional[np.ndarray] = None, **fit_params) -> 'CustomTransformedTargetRegressor':
-        y_train_trans = apply_transform_with_checks(
-            transformer=self.transformer, method_name='transform', X=reshape_to_2d_array(y_train))
-        weights = self._calculate_weights(y_train, y_val)
-
-        self.regressor_ = clone(self.regressor)
-
-        if isinstance(self.regressor_, Pipeline):
-            self.regressor_.fit(X_train, y_train_trans,
-                                regressor__sample_weight=weights)
-        else:
-            self.regressor_.fit(X_train, y_train_trans, sample_weight=weights)
-
-        self.transformer_ = self.transformer
-        return self
-    '''
-
     def fit(self, X: np.ndarray, y: np.ndarray, **fit_params) -> 'CustomTransformedTargetRegressor':
         """
         Fit the regressor.
         """
         logger.info('Fitting the CustomTransformedTargetRegressor.')
+
+        # Invalidate the cache when the model is fitted
+        self._cached_X = None
+        self._cached_samples = None
 
         X, y = check_X_y(X, reshape_to_1d_array(
             y), accept_sparse=True, force_all_finite=True, y_numeric=True)
@@ -112,12 +91,8 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
 
         self.transformer_ = clone(self.transformer)
 
-        # self.transformer, y = apply_transform_with_checks(
-        #    transformer=self.transformer, method_name='fit_transform', X=reshape_to_2d_array(y), #sanity_check=sanity_check)
-        self.transformer_ = apply_transform_with_checks(
-            transformer=self.transformer_, method_name='fit', X=reshape_to_2d_array(y), sanity_check=sanity_check)
-        y = apply_transform_with_checks(
-            transformer=self.transformer_, method_name='transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
+        self.transformer_, y = apply_transform_with_checks(
+            transformer=self.transformer_, method_name='fit_transform', X=reshape_to_2d_array(y), sanity_check=sanity_check)
         y_val = apply_transform_with_checks(transformer=self.transformer_, method_name='transform',
                                             X=reshape_to_2d_array(y_val), sanity_check=sanity_check) if y_val is not None else None
         # y and y_val are 2d
@@ -132,84 +107,78 @@ class CustomTransformedTargetRegressor(TransformedTargetRegressor):
             fit_params.pop("y_val")
 
         if "sample_weight" not in fit_params:
-            fit_params["sample_weight"] = train_weights
+            fit_params["regressor__sample_weight"] = train_weights
         if "val_sample_weight" not in fit_params:
-            fit_params["val_sample_weight"] = val_weights
+            fit_params["regressor__val_sample_weight"] = val_weights
 
         self.regressor_ = clone(self.regressor)
 
-        if isinstance(self.regressor_, Pipeline):
-            if 'preprocessor' in self.regressor_.named_steps:
-                self.regressor_.named_steps['preprocessor'] = apply_transform_with_checks(
-                    transformer=self.regressor_.named_steps['preprocessor'], method_name='fit', X=X, sanity_check=sanity_check)
-
-            self.regressor_.named_steps['regressor'] = apply_transform_with_checks(
-                transformer=self.regressor_.named_steps['regressor'], method_name='fit', X=X, y=y, X_val=X_val, y_val=y_val, sanity_check=sanity_check)
-
-        else:
-            self.regressor_ = apply_transform_with_checks(
-                transformer=self.regressor_, method_name='fit', X=X, y=y, X_val=X_val, y_val=y_val, sanity_check=sanity_check)
+        self.regressor_ = apply_transform_with_checks(
+            transformer=self.regressor_, method_name='fit', X=X, y=y, regressor__X_val=X_val, regressor__Y_val=y_val, **fit_params, sanity_check=sanity_check)
 
         logger.info('Fitting completed.')
         return self
+
+    def predict_samples(self, X: np.ndarray, num_samples: int = 1000, sanity_check: bool = False) -> np.ndarray:
+        """
+        Predict samples of the target variable.
+        """
+        logger.info('Predicting samples of the target variable.')
+        check_is_fitted(self, 'regressor_')
+        check_is_fitted(self, 'transformer_')
+        X = check_array(X, accept_sparse=True,
+                        force_all_finite=True, ensure_2d=True)
+
+        if np.array_equal(X, self._cached_X) and self._cached_samples is not None:
+            # If X is the same as the last time this method was called,
+            # return the cached result
+            return self._cached_samples
+
+        if 'preprocessor' in self.regressor_.named_steps:
+            X = apply_transform_with_checks(
+                transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
+            # X is 2d
+        pred_dist = apply_transform_with_checks(
+            transformer=self.regressor_.named_steps['regressor'], method_name='pred_dist', X=X, sanity_check=sanity_check)
+        # pred_dist is an object with loc and scale attributes
+
+        # Generate samples in the transformed space
+        y_pred_samples_transformed = norm.rvs(
+            size=(num_samples, X.shape[0]), loc=pred_dist.loc, scale=pred_dist.scale)
+        # y_pred_samples_transformed is of shape [num_samples, n_instances]
+
+        # Apply inverse transformation to each sample
+        y_pred_samples = []
+        for sample in y_pred_samples_transformed:
+            sample_reshaped = reshape_to_2d_array(sample)  # Make sure it's 2d
+            sample_inverse = apply_transform_with_checks(
+                transformer=self.transformer_, method_name='inverse_transform', X=sample_reshaped, sanity_check=sanity_check)
+            y_pred_samples.append(reshape_to_1d_array(
+                sample_inverse))  # Make it 1d again
+
+        # Convert the list to a numpy array
+        y_pred_samples = np.array(y_pred_samples)
+
+        # Cache the result before returning it
+        self._cached_X = X
+        self._cached_samples = y_pred_samples
+
+        logger.info('Prediction of samples completed.')
+        return y_pred_samples
 
     def predict(self, X: np.ndarray, sanity_check: bool = False) -> np.ndarray:
         """
         Predict the target variable.
         """
-        logger.info('Predicting the target variable.')
-        check_is_fitted(self, 'regressor_')
-        check_is_fitted(self, 'transformer_')
-        X = check_array(X, accept_sparse=True,
-                        force_all_finite=True, ensure_2d=True)
-
-        if 'preprocessor' in self.regressor_.named_steps:
-            X = apply_transform_with_checks(
-                transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
-            # X is 2d
-        y_pred_mean = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X, sanity_check=sanity_check)
-        # y_pred_mean can be 1d or 2d, I don't know
-        y_pred_mean = apply_transform_with_checks(
-            transformer=self.transformer_, method_name='inverse_transform', X=reshape_to_2d_array(y_pred_mean), sanity_check=sanity_check)
-        # y_pred_mean is 2d
-        logger.info('Prediction completed.')
-        return reshape_to_1d_array(y_pred_mean)
+        # return np.median(self.predict_samples(X, num_samples=10000, sanity_check=sanity_check), axis=0)
+        return np.mean(self.predict_samples(X, num_samples=10000, sanity_check=sanity_check), axis=0)
 
     def predict_std(self, X: np.ndarray, sanity_check: bool = False) -> np.ndarray:
         """
         Predict the standard deviation of the target variable.
         """
-        logger.info('Predicting the standard deviation of the target variable.')
-        check_is_fitted(self, 'regressor_')
-        check_is_fitted(self, 'transformer_')
-        X = check_array(X, accept_sparse=True,
-                        force_all_finite=True, ensure_2d=True)
-
-        if 'preprocessor' in self.regressor_.named_steps:
-            X = apply_transform_with_checks(
-                transformer=self.regressor_.named_steps['preprocessor'], method_name='transform', X=X, sanity_check=sanity_check)
-            # X is 2d
-        y_pred_mean = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict', X=X, sanity_check=sanity_check)
-        # y_pred_mean can be 1d or 2d, I don't know
-        y_pred_std = apply_transform_with_checks(
-            transformer=self.regressor_.named_steps['regressor'], method_name='predict_std', X=X, sanity_check=sanity_check)
-        # y_pred_std can be 1d or 2d, I don't know
-
-        y_pred_upper = y_pred_mean + y_pred_std
-        y_pred_lower = y_pred_mean - y_pred_std
-        # y_pred_upper and y_pred_lower can be 1d or 2d, I don't know
-
-        y_pred_upper_inverse = apply_transform_with_checks(
-            transformer=self.transformer_, method_name='inverse_transform', X=reshape_to_2d_array(y_pred_upper), sanity_check=sanity_check)
-        y_pred_lower_inverse = apply_transform_with_checks(
-            transformer=self.transformer_, method_name='inverse_transform', X=reshape_to_2d_array(y_pred_lower), sanity_check=sanity_check)
-        y_pred_std_inverse = (y_pred_upper_inverse - y_pred_lower_inverse) / 2
-        # y_pred_std_inverse is 2d
-
-        logger.info('Prediction of standard deviation completed.')
-        return reshape_to_1d_array(y_pred_std_inverse)
+        # return (np.quantile(self.predict_samples(X, num_samples=10000, sanity_check=sanity_check), 0.75, axis=0) - np.quantile(self.predict_samples(X, num_samples=10000, sanity_check=sanity_check), 0.25, axis=0)) / 1.349  # 1.349 is the interquartile range of a normal distribution
+        return np.std(self.predict_samples(X, num_samples=10000, sanity_check=sanity_check), axis=0)
 
     def score(self, X: np.ndarray, y: np.ndarray, sample_weight: Optional[np.ndarray] = None) -> float:
         """
@@ -270,7 +239,7 @@ def create_estimator(model_config: Optional[ModelConfig] = None,
 
     logger.info('Building pipelines.')
 
-    pipeline_steps = [('regressor', CustomNGBRegressor(**vars(model_config)))]
+    pipeline_steps = [('regressor', NGBRegressor(**vars(model_config)))]
     if X_transformer.transformers:
         logger.info('Building feature pipeline with preprocessor.')
         pipeline_X = Pipeline([(transformer.name, transformer.transformer)

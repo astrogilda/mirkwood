@@ -65,7 +65,7 @@ def test_model_config_defaults():
     assert config.Dist == Normal
     assert config.Score == LogScore
     assert config.n_estimators == 500
-    assert config.learning_rate == 0.04
+    assert config.learning_rate == 0.01
     assert config.col_sample == 1.0
     assert config.minibatch_frac == 1.0
     assert config.verbose is False
@@ -103,7 +103,7 @@ def test_customngbregressor_init():
     assert ngb.Dist == Normal
     assert ngb.Score == LogScore
     assert ngb.n_estimators == 500
-    assert ngb.learning_rate == 0.04
+    assert ngb.learning_rate == 0.01
     assert ngb.col_sample == 1.0
     assert ngb.minibatch_frac == 1.0
     assert ngb.verbose is False
@@ -200,6 +200,13 @@ def test_customngbregressor_compare_with_ngbregressor(arrays):
     ngb.fit(X_train, y_train)
     y_pred_ngb = ngb.pred_dist(X_val).loc
     y_pred_std_ngb = ngb.pred_dist(X_val).scale
+
+    print(f"y_val:{y_val}")
+    print(f"y_pred_ngb:{y_pred_ngb}")
+    print(f"y_pred_cngb:{y_pred_cngb}")
+    print(f"y_pred_std_ngb:{y_pred_std_ngb}")
+    print(f"y_pred_std_cngb:{y_pred_std_cngb}")
+    print("\n")
 
     assert np.allclose(y_pred_cngb, y_pred_ngb, rtol=.4)
     assert np.allclose(y_pred_std_cngb, y_pred_std_ngb, rtol=.4)

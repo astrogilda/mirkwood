@@ -12,6 +12,8 @@ from src.regressors.customtransformedtarget_regressor import CustomTransformedTa
 from utils.weightify import Weightify
 from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 
+from ngboost import NGBRegressor
+
 
 @st.composite
 def array_1d_and_2d(draw):
@@ -143,10 +145,11 @@ def test_custom_transformed_target_regressor(arrays):
     # Instantiate transformers
     X_transformer = XTransformer(transformers=[])
     y_transformer = YTransformer(transformers=[])
-    model_config = ModelConfig()
+    model_config = ModelConfig(early_stopping_rounds=None)
 
     # Instantiate the regressor
     cngb = CustomNGBRegressor(**vars(model_config))
+    ngb = NGBRegressor(**vars(model_config))
 
     # Instantiate the CustomTransformedTargetRegressor
     ttr = create_estimator(model_config=model_config,
@@ -158,10 +161,22 @@ def test_custom_transformed_target_regressor(arrays):
     y_pred_std = ttr.predict_std(X_val)
 
     # Fit the base regressor for comparison
-    cngb.fit(X_train, y_train, X_val=X_val, y_val=y_val, sanity_check=True)
+    cngb.fit(X_train, y_train, X_val=X_val, y_val=y_val)
     y_pred_cngb = cngb.pred_dist(X_val).loc
     y_pred_std_cngb = cngb.pred_dist(X_val).scale
 
+    ngb.fit(X_train, y_train, X_val=X_val, Y_val=y_val)
+    y_pred_ngb = ngb.pred_dist(X_val).loc
+    y_pred_std_ngb = ngb.pred_dist(X_val).scale
+
     # Predictions made by CustomTransformedTargetRegressor should be similar to those made by the base estimator
+    print(f"y_val:{y_val}")
+    print(f"y_pred:{y_pred}")
+    print(f"y_pred_ngb:{y_pred_ngb}")
+    print(f"y_pred_cngb:{y_pred_cngb}")
+    print(f"y_pred_std:{y_pred_std}")
+    print(f"y_pred_std_ngb:{y_pred_std_ngb}")
+    print(f"y_pred_std_cngb:{y_pred_std_cngb}")
+    print("\n")
     assert np.allclose(y_pred, y_pred_cngb, rtol=.15)
     assert np.allclose(y_pred_std, y_pred_std_cngb, rtol=.15)

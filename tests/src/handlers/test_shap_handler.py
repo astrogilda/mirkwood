@@ -1,6 +1,6 @@
 
 import re
-from pydantic import ValidationError
+from pydantic import ValidationError, parse_obj_as
 from sklearn.datasets import make_regression
 import tempfile
 import os
@@ -11,11 +11,12 @@ from sklearn.exceptions import NotFittedError
 from sklearn.ensemble import RandomForestRegressor
 from src.handlers.shap_handler import ShapHandler
 from src.handlers.model_handler import ModelHandlerConfig
+from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 import shap
 import logging
 from sklearn.base import BaseEstimator
 from utils.validate import check_estimator_compliance
-
+from copy import copy
 # Replace FEATURE_NAMES with the actual feature names in your dataset
 FEATURE_NAMES = ["feature1", "feature2", "feature3"]
 
@@ -149,6 +150,19 @@ def test_precreated_explainer(dummy_shap_handler_config: ModelHandlerConfig, pre
 
     dummy_shap_handler_config_dict = dummy_shap_handler_config.dict()
     dummy_shap_handler_config_dict['precreated_explainer'] = precreated_explainer
+
+    if dummy_shap_handler_config_dict['X_transformer']['transformers'] is not None:
+        dummy_shap_handler_config_dict['X_transformer'] = XTransformer(transformers=[TransformerConfig(
+            name=i['name'], transformer=i['transformer']) for i in dummy_shap_handler_config_dict['X_transformer']['transformers']])
+    else:
+        dummy_shap_handler_config_dict['X_transformer'] = XTransformer(
+            transformers=None)
+    if dummy_shap_handler_config_dict['y_transformer']['transformers'] is not None:
+        dummy_shap_handler_config_dict['y_transformer'] = YTransformer(transformers=[TransformerConfig(
+            name=i['name'], transformer=i['transformer']) for i in dummy_shap_handler_config_dict['y_transformer']['transformers']])
+    else:
+        dummy_shap_handler_config_dict['y_transformer'] = YTransformer(
+            transformers=None)
 
     if precreated_explainer is not "Not an explainer":
         # Create a new config with the precreated explainer, so pydantic validations can be leveraged

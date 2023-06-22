@@ -198,8 +198,9 @@ def calculate_interval_sharpness(yt: np.ndarray, yp: np.ndarray, yp_lower: np.nd
     """
 
     # Transform true targets into percentiles
+    yt_transformed = np.empty_like(yt)
     for i in prange(yt.shape[0]):
-        yt[i] = calculate_cdf_normdist(
+        yt_transformed[i] = calculate_cdf_normdist(
             yt[i], yp[i], 0.5 * (yp_upper[i] - yp_lower[i]))
 
     # Define the lower and upper bounds of the prediction intervals
@@ -211,16 +212,50 @@ def calculate_interval_sharpness(yt: np.ndarray, yp: np.ndarray, yp_lower: np.nd
     delta_alpha = yp_upper - yp_lower
 
     # Compute the sharpness
-    intsharp = np.nanmean(np.where(yt >= yp_upper,
+    intsharp = np.nanmean(np.where(yt_transformed >= yp_upper,
                                    np.abs(-2 * alpha * delta_alpha -
-                                          4 * (yt - yp_upper)),
-                                   np.where(yp_lower >= yt,
+                                          4 * (yt_transformed - yp_upper)),
+                                   np.where(yp_lower >= yt_transformed,
                                             np.abs(-2 * alpha * delta_alpha -
-                                                   4 * (yp_lower - yt)),
+                                                   4 * (yp_lower - yt_transformed)),
                                             np.abs(-2 * alpha * delta_alpha))))
 
     assert intsharp >= 0, "Interval sharpness must be non-negative."
     return intsharp
+
+
+@jit(nopython=True, parallel=True)
+def calculate_interval_score(yt: np.ndarray, yp_lower: np.ndarray, yp_upper: np.ndarray, confint: float) -> float:
+    """ 
+    Calculate the interval score of probabilistic predictions.
+
+    Parameters
+    ----------
+    yt : np.ndarray
+        True target values.
+    yp_lower : np.ndarray
+        Lower bounds of the prediction intervals.
+    yp_upper : np.ndarray
+        Upper bounds of the prediction intervals.
+    alpha : float
+        Significance level (1 - desired confidence interval level).
+
+    Returns
+    -------
+    float
+        Interval score.
+    """
+
+    alpha = 1 - confint
+    n = yt.shape[0]
+    interval_width = yp_upper - yp_lower
+
+    lower_penalty = 2 / alpha * np.maximum(yp_lower - yt, 0)
+    upper_penalty = 2 / alpha * np.maximum(yt - yp_upper, 0)
+
+    interval_score = (interval_width + lower_penalty + upper_penalty) / n
+
+    return np.sum(interval_score)
 
 
 @jit(nopython=True)
@@ -335,6 +370,22 @@ class ProbabilisticErrorMetrics(ErrorMetricsBase):
             Interval sharpness.
         """
         return calculate_interval_sharpness(self.yt, self.yp, self.yp_lower, self.yp_upper, confint=self.confidence_level)
+
+    def interval_score(self) -> float:
+        """
+        Calculate the interval score.
+
+        Parameters
+        ----------
+        confint : float, optional
+            Confidence interval, by default 0.6827
+
+        Returns
+        -------
+        float
+            Interval score.
+        """
+        return calculate_interval_score(self.yt, self.yp_lower, self.yp_upper, confint=self.confidence_level)
 
     def gaussian_crps(self) -> float:
         return calculate_gaussian_crps(self.yt, self.yp, self.yp_lower, self.yp_upper)

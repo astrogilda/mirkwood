@@ -599,9 +599,9 @@ class NGBoost:
         all_params_importances = np.average(
             all_params_importances, axis=1, weights=self.scalings
         )
-        return all_params_importances / np.sum(
+        return all_params_importances / (np.sum(
             all_params_importances, axis=1, keepdims=True
-        )
+        ) + 1e-6)  # Sankalp Gilda: Added 1e-6 to avoid divide by zero error
 
     def _get_feature_importance(self, tree, tree_index):
         tree_feature_importance = getattr(tree, "feature_importances_")
