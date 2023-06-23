@@ -41,8 +41,8 @@ class ModelHandlerConfig(BaseModel):
     X_train: ndarray
     y_train: ndarray
     feature_names: List[str]
-    galaxy_property: Optional[GalaxyProperty] = Field(
-        default=GalaxyProperty.STELLAR_MASS)
+    # Field(default=GalaxyProperty.STELLAR_MASS)
+    galaxy_property: Optional[GalaxyProperty] = None
     X_val: Optional[ndarray] = None
     y_val: Optional[ndarray] = None
     weight_flag: bool = Field(

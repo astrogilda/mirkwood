@@ -10,7 +10,7 @@ from sklearn.utils.estimator_checks import (
     _yield_all_checks
 )
 from sklearn.utils.estimator_checks import check_parameters_default_constructible, check_estimator
-from sklearn.utils import all_estimators
+from sklearn.utils import all_estimators, check_X_y
 import logging
 import numpy as np
 from pathlib import Path
@@ -181,6 +181,12 @@ def check_estimator_compliance(estimator: BaseEstimator, skips: set = {}) -> Non
                 raise e
             else:
                 check(estimator_clone)
+
+
+def validate_X_y(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    X, y = check_X_y(X, y, force_all_finite=True, accept_sparse=False,
+                     y_numeric=True, ensure_2d=True, allow_nd=False)
+    return X, y
 
 
 '''

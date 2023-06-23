@@ -20,8 +20,25 @@ from src.transformers.multiple_transformer import MultipleTransformer
 
 from scipy.stats import norm
 
-logging.basicConfig(level=logging.INFO)
+# Create a custom logger
 logger = logging.getLogger(__name__)
+# This removes all handlers from the logger object, if any exist.
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+# prevent log events from being passed to the root logger
+logger.propagate = False
+# Set level of logging
+logger.setLevel(logging.INFO)
+# Create handlers
+handler = logging.FileHandler('ctt_regressor.log')
+handler.setLevel(logging.INFO)
+# Create formatters and add it to handlers
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+# Add handlers to the logger
+logger.addHandler(handler)
+
 
 EPS = 1e-6
 
