@@ -1,3 +1,4 @@
+from src.transformers.yscaler import YScaler
 import re
 import numpy as np
 import pytest
@@ -139,6 +140,28 @@ def test_multiple_transformer_empty_y_transformer(X):
     X_trans = multi_trans.transform(X)
     assert np.array_equal(X, X_trans)
     logger.info("MultipleTransformer handled empty YTransformer. Test Passed.")
+
+
+@settings(deadline=None)
+@given(array_2d())
+def test_multiple_transformer_yscaler_transformer(X):
+    """Test MultipleTransformer's response to YTransformer consisting only of YScaler"""
+    if (X > 0).all():
+        prop = 'stellar_mass'
+    else:
+        prop = None
+    print(f"prop: {prop}")
+    y_transformer = YTransformer(
+        transformers=[TransformerConfig(name="y_scaler", transformer=YScaler(prop=prop))])
+    multi_trans = MultipleTransformer(**vars(y_transformer))
+    # Expecting no exceptions here as the transformer list is empty but valid
+    multi_trans.fit(X)
+    # Check that the transformation is a passthrough
+    X_trans = multi_trans.transform(X)
+    X_inv = multi_trans.inverse_transform(X_trans)
+    np.testing.assert_array_almost_equal(X_inv, X)
+    logger.info(
+        "MultipleTransformer handled YTransformer consisting of only YScaler. Test Passed.")
 
 
 @settings(deadline=None)

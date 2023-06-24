@@ -7,7 +7,7 @@ import numpy as np
 from src.regressors.customtransformedtarget_regressor import (
     CustomTransformedTargetRegressor, create_estimator)
 from src.handlers.model_handler import ModelHandlerConfig
-from src.handlers.processy_handler import ProcessYHandler
+from transformers.yscaler import YScaler
 from utils.validate import validate_file_path
 
 from utils.logger import LoggingUtility

@@ -44,7 +44,7 @@ def get_label_transform_func() -> Dict[str, Tuple[Callable, Callable]]:
     }
 
 
-class ProcessYHandler(BaseEstimator, TransformerMixin):
+class YScaler(BaseEstimator, TransformerMixin):
     """
     Scikit-learn compatible transformer for preprocessing and postprocessing target variable y based on the specified galaxy property.
     """
@@ -75,7 +75,7 @@ class ProcessYHandler(BaseEstimator, TransformerMixin):
             If X is complex or non-numeric data.
         """
 
-        logger.debug("Fitting ProcessYHandler.")
+        logger.debug("Fitting YScaler.")
 
         # Check if X contains complex or non-numeric data
         X = check_array(X, accept_sparse=True,
@@ -98,7 +98,7 @@ class ProcessYHandler(BaseEstimator, TransformerMixin):
                 "All elements of X must be non-negative when prop is specified.")
 
         self.is_fitted_ = True
-        logger.debug("ProcessYHandler has been fitted.")
+        logger.debug("YScaler has been fitted.")
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -121,7 +121,7 @@ class ProcessYHandler(BaseEstimator, TransformerMixin):
             Preprocessed data.
         """
 
-        logger.debug("Transforming data using ProcessYHandler.")
+        logger.debug("Transforming data using YScaler.")
 
         check_is_fitted(self, 'is_fitted_')
 
@@ -164,7 +164,7 @@ class ProcessYHandler(BaseEstimator, TransformerMixin):
             Inverse transformed data.
         """
 
-        logger.debug("Applying inverse transformation using ProcessYHandler.")
+        logger.debug("Applying inverse transformation using YScaler.")
 
         check_is_fitted(self, 'is_fitted_')
 

@@ -11,7 +11,7 @@ import os
 from src.handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 from src.handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
 from src.handlers.data_handler import DataHandler
-from src.handlers.processy_handler import GalaxyProperty
+from transformers.yscaler import GalaxyProperty
 from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import create_estimator

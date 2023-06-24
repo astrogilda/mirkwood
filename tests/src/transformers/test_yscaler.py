@@ -3,15 +3,15 @@ import pytest
 import numpy as np
 from sklearn.utils.validation import NotFittedError
 
-from src.handlers.processy_handler import ProcessYHandler
+from transformers.yscaler import YScaler
 
 
 def test_processy_stellar_mass():
     """
-    Test to check if the ProcessYHandler works correctly for STELLAR_MASS.
+    Test to check if the YScaler works correctly for STELLAR_MASS.
     """
     stellar_mass = np.array([10, 100])
-    transformer = ProcessYHandler("stellar_mass")
+    transformer = YScaler("stellar_mass")
     transformer.fit(stellar_mass)
     log_stellar_mass = transformer.transform(stellar_mass)
     postprocessed_y = transformer.inverse_transform(log_stellar_mass)
@@ -20,10 +20,10 @@ def test_processy_stellar_mass():
 
 def test_processy_dust_mass():
     """
-    Test to check if the ProcessYHandler works correctly for DUST_MASS.
+    Test to check if the YScaler works correctly for DUST_MASS.
     """
     dust_mass = np.array([999, 9999])
-    transformer = ProcessYHandler(prop="dust_mass")
+    transformer = YScaler(prop="dust_mass")
     transformer.fit(dust_mass)
     log_dust_mass = transformer.transform(dust_mass)
     postprocessed_y = transformer.inverse_transform(log_dust_mass)
@@ -32,10 +32,10 @@ def test_processy_dust_mass():
 
 def test_processy_metallicity():
     """
-    Test to check if the ProcessYHandler works correctly for METALLICITY.
+    Test to check if the YScaler works correctly for METALLICITY.
     """
     metallicity = np.array([100000, 1000000])
-    transformer = ProcessYHandler(prop="metallicity")
+    transformer = YScaler(prop="metallicity")
     transformer.fit(metallicity)
     log_metallicity = transformer.transform(metallicity)
     postprocessed_y = transformer.inverse_transform(log_metallicity)
@@ -44,10 +44,10 @@ def test_processy_metallicity():
 
 def test_processy_sfr():
     """
-    Test to check if the ProcessYHandler works correctly for SFR.
+    Test to check if the YScaler works correctly for SFR.
     """
     sfr = np.array([9999999, 99999999])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     transformer.fit(sfr)
     log_sfr = transformer.transform(sfr)
     postprocessed_y = transformer.inverse_transform(log_sfr)
@@ -56,50 +56,50 @@ def test_processy_sfr():
 
 def test_processy_invalid_prop():
     """
-    Test to check if the ProcessYHandler raises an error for an invalid prop.
+    Test to check if the YScaler raises an error for an invalid prop.
     """
     data = np.array([7, 8])
-    transformer = ProcessYHandler(prop='INVALID')
+    transformer = YScaler(prop='INVALID')
     with pytest.raises(ValueError):
         transformer.fit(data)
 
 
 def test_processy_complex_data():
     """
-    Test to check if the ProcessYHandler raises an error for complex data.
+    Test to check if the YScaler raises an error for complex data.
     """
     complex_data = np.array([1+1j, 2+2j])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     with pytest.raises(ValueError):
         transformer.fit(complex_data)
 
 
 def test_processy_non_numeric_data():
     """
-    Test to check if the ProcessYHandler raises an error for non-numeric data.
+    Test to check if the YScaler raises an error for non-numeric data.
     """
     non_numeric_data = np.array(['a', 'b'])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     with pytest.raises(ValueError):
         transformer.fit(non_numeric_data)
 
 
 def test_processy_none_prop_fit_transform():
     """
-    Test to check if the ProcessYHandler works correctly when prop is None.
+    Test to check if the YScaler works correctly when prop is None.
     """
     data = np.array([7, 8])
-    transformer = ProcessYHandler()
+    transformer = YScaler()
     transformed = transformer.fit_transform(data)
     np.testing.assert_array_equal(transformed, data)
 
 
 def test_processy_none_prop_fit_then_transform():
     """
-    Test to check if the ProcessYHandler works correctly when prop is None.
+    Test to check if the YScaler works correctly when prop is None.
     """
     data = np.array([7, 8])
-    transformer = ProcessYHandler()
+    transformer = YScaler()
     transformer.fit(data)
     transformed = transformer.transform(data)
     np.testing.assert_array_equal(transformed, data)
@@ -107,40 +107,40 @@ def test_processy_none_prop_fit_then_transform():
 
 def test_processy_negative_input():
     """
-    Test to check if the ProcessYHandler works correctly for negative input values.
+    Test to check if the YScaler works correctly for negative input values.
     """
     data = np.array([-1, -2])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     with pytest.raises(ValueError, match="All elements of X must be non-negative when prop is specified."):
         transformer.fit(data)
 
 
 def test_processy_zero_input():
     """
-    Test to check if the ProcessYHandler works correctly for zero input values.
+    Test to check if the YScaler works correctly for zero input values.
     """
     data = np.array([0, 0])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     with pytest.raises(ValueError, match="All elements of X must be non-negative when prop is specified."):
         transformer.fit(data)
 
 
 def test_processy_nan_input():
     """
-    Test to check if the ProcessYHandler raises an error for input data with NaN values.
+    Test to check if the YScaler raises an error for input data with NaN values.
     """
     data = np.array([np.nan, 3])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     with pytest.raises(ValueError, match="Input contains NaN."):
         transformer.fit(data)
 
 
 def test_processy_transform_without_fit():
     """
-    Test to check if the ProcessYHandler raises an error when transform is called without first calling fit.
+    Test to check if the YScaler raises an error when transform is called without first calling fit.
     """
     log_sfr = np.array([7, 8])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     with pytest.raises(NotFittedError):
         transformer.transform(log_sfr)
 
@@ -150,7 +150,7 @@ def test_processy_inverse_transform_output():
     Test to check if the output of inverse_transform is almost equal to the input.
     """
     log_sfr = np.array([7, 8])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     transformer.fit(log_sfr)
     postprocessed_y = transformer.inverse_transform(log_sfr)
     inverse_transformed_y = transformer.transform(
@@ -160,20 +160,20 @@ def test_processy_inverse_transform_output():
 
 def test_inverse_transform_without_fit():
     """
-    Test to check if the ProcessYHandler raises an error when inverse_transform is called without first calling fit.
+    Test to check if the YScaler raises an error when inverse_transform is called without first calling fit.
     """
     log_sfr = np.array([7, 8])
-    transformer = ProcessYHandler(prop="sfr")
+    transformer = YScaler(prop="sfr")
     with pytest.raises(NotFittedError):
         transformer.inverse_transform(log_sfr)
 
 
 def test_processy_large_input():
     """
-    Test to check if the ProcessYHandler works correctly for large input values.
+    Test to check if the YScaler works correctly for large input values.
     """
     data = np.array([1e20, 1e21])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     transformer.fit(data)
     transformed = transformer.transform(data)
     expected_output = np.array([20, 21])
@@ -182,10 +182,10 @@ def test_processy_large_input():
 
 def test_processy_small_input():
     """
-    Test to check if the ProcessYHandler works correctly for small input values.
+    Test to check if the YScaler works correctly for small input values.
     """
     data = np.array([1e-6, 1e-7])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     transformer.fit(data)
     transformed = transformer.transform(data)
     expected_output = np.array([-6, -7])
@@ -194,10 +194,10 @@ def test_processy_small_input():
 
 def test_processy_2d_array_input():
     """
-    Test to check if the ProcessYHandler works correctly for 2D array as input.
+    Test to check if the YScaler works correctly for 2D array as input.
     """
     data = np.array([[1, 2], [3, 4]])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     transformer.fit(data)
     transformed = transformer.transform(data)
     expected_output = np.array([[0, 0.30103], [0.47712, 0.60206]])
@@ -207,10 +207,10 @@ def test_processy_2d_array_input():
 
 def test_processy_len_1_input():
     """
-    Test to check if the ProcessYHandler works correctly for 1D array of length 1 as input.
+    Test to check if the YScaler works correctly for 1D array of length 1 as input.
     """
     data = np.array([1])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     transformer.fit(data)
     transformed = transformer.transform(data)
     expected_output = np.array([0])
@@ -219,9 +219,9 @@ def test_processy_len_1_input():
 
 def test_processy_empty_input():
     """
-    Test to check if the ProcessYHandler works correctly for an empty array as input.
+    Test to check if the YScaler works correctly for an empty array as input.
     """
     data = np.array([])
-    transformer = ProcessYHandler(prop="stellar_mass")
+    transformer = YScaler(prop="stellar_mass")
     with pytest.raises(ValueError):
         transformer.fit(data)

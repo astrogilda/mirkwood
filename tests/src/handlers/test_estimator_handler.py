@@ -167,13 +167,13 @@ def test_fit_twice(dummy_estimator_handler):
 
 
 def test_invalid_galaxy_property(dummy_estimator_handler):
-    """This won't fail because ProcessYHandler will function as passthrough if galaxy_property is None."""
+    """This won't fail because YScaler will function as passthrough if galaxy_property is None."""
     dummy_estimator_handler._config.galaxy_property = None
     dummy_estimator_handler.fit()
 
 
 def test_convert_to_new_scale_before_fit(dummy_estimator_handler):
-    """This won't fail because _convert_to_new_scale does not require the model to be fitted; it is meerely a nice way to access ProcessYHandler."""
+    """This won't fail because _convert_to_new_scale does not require the model to be fitted; it is meerely a nice way to access YScaler."""
     dummy_estimator_handler._convert_to_new_scale(
         dummy_estimator_handler._config.y_train)
 

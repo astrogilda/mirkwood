@@ -21,8 +21,8 @@ from utils.weightify import Weightify
 from src.regressors.customngb_regressor import ModelConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
-from src.handlers.processy_handler import ProcessYHandler
-from src.handlers.processy_handler import GalaxyProperty
+from transformers.yscaler import YScaler
+from transformers.yscaler import GalaxyProperty
 
 # Suppress deprecation warnings
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
@@ -261,7 +261,7 @@ class ModelHandler:
             Tuple of arrays: converted predicted mean values and standard deviations.
         """
         prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
-        post_processor = ProcessYHandler(prop)
+        post_processor = YScaler(prop)
         post_processor.fit(predicted_mean)
         return post_processor.inverse_transform(predicted_mean), post_processor.inverse_transform(predicted_std) if predicted_std is not None else None
 
@@ -275,6 +275,6 @@ class ModelHandler:
             Tuple of arrays: converted predicted mean values and standard deviations.
         """
         prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
-        post_processor = ProcessYHandler(prop)
+        post_processor = YScaler(prop)
         post_processor.fit(y)
         return post_processor.transform(y)

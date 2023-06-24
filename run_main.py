@@ -8,7 +8,7 @@ from src.handlers.bootstrap_handler import BootstrapHandler
 from src.handlers.model_handler import ModelHandler
 from src.handlers.trainpredict_handler import TrainPredictHandler, TrainPredictHandlerConfig
 from src.handlers.data_handler import DataHandler, DataHandlerConfig, TrainData
-from src.handlers.processy_handler import GalaxyProperty
+from transformers.yscaler import GalaxyProperty
 from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from utils.custom_cv import CustomCV
 
@@ -47,12 +47,39 @@ tph_config = TrainPredictHandlerConfig(
 )
 
 tph = TrainPredictHandler(tph_config)
-
 tph.train()
 
+tph._prepare_model_handler(X_train, y_train, X_val, y_val, best_estimator, file_path, shap_file_path)
+    def _prepare_model_handler(self, X_train, y_train, X_val, y_val, best_estimator, file_path, shap_file_path):
+        model_handler_config = ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            feature_names=self._config.feature_names,
+            galaxy_property=self._config.galaxy_property,
+            X_val=X_val,
+            y_val=y_val,
+            weight_flag=self._config.weight_flag,
+            fitting_mode=self._config.fitting_mode,
+            file_path=file_path,
+            shap_file_path=shap_file_path,
+            model_config=self._config.model_config,
+            X_transformer=self._config.X_transformer,
+            y_transformer=self._config.y_transformer,
+            weightifier=self._config.weightifier,
+            precreated_estimator=best_estimator,
+        )
+        model_handler = ModelHandler(config=model_handler_config)
+        return model_handle
+
+
+
 # Load and predict
+"""
+Two cases -- predict on calibration data, or test data
 
-
+"""
+Path(str(self.model_handler._config.file_path).replace(
+                ".pkl", f"_bootstrap_{seed}.pkl"))
 
 class NestedCV:
     def __init__(self, X, y):
