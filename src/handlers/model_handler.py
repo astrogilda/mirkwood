@@ -33,8 +33,10 @@ logger = LoggingUtility.get_logger(
     __name__, log_file='logs/model_handler.log')
 logger.info('Saving logs from model_handler.py')
 
+# TODO: isolate common validations in TrainPredictHandlerConfig and ModelHandlerConfig into a separate class. Then have TrainPredictHandlerConfig and ModelHandlerConfig inherit from that class. This will avoid having to repeat the same validations in both classes. Ensure that attribute names are common between the two classes.
 
 # TODO: more robust way to handle assignment of new X_transformer, y_transformer, of weightifier, after modelhandlerconfig has been instantiated. so one can continue to leverage pydantic's validations
+
 
 class ModelHandlerConfig(BaseModel):
     """
@@ -169,6 +171,10 @@ class ModelHandler:
         """
         Fit the model by invoking the fit method of the estimator handler.
         """
+        self._config.y_train = self._convert_to_new_scale(self._config.y_train)
+        if self._config.y_val is not None:
+            self._config.y_val = self._convert_to_new_scale(self._config.y_val)
+
         self._estimator_handler.fit()
 
     def predict(self, X_test: Optional[ndarray]) -> Tuple[ndarray, ndarray]:
@@ -258,3 +264,17 @@ class ModelHandler:
         post_processor = ProcessYHandler(prop)
         post_processor.fit(predicted_mean)
         return post_processor.inverse_transform(predicted_mean), post_processor.inverse_transform(predicted_std) if predicted_std is not None else None
+
+    def _convert_to_new_scale(self, y: np.ndarray) -> np.ndarray:
+        """
+        Convert the predicted values and uncertainties to the original scale.
+        Args:
+            predicted_mean: Predicted mean values.
+            predicted_std: Predicted standard deviations.
+        Returns:
+            Tuple of arrays: converted predicted mean values and standard deviations.
+        """
+        prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
+        post_processor = ProcessYHandler(prop)
+        post_processor.fit(y)
+        return post_processor.transform(y)

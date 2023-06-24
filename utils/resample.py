@@ -59,9 +59,6 @@ class ResamplerConfig(BaseModel):
         default=1, description='Seed for the random number generator.')
     replace: bool = True
 
-    class Config:
-        
-
 
 class Resampler:
     def __init__(self, params: ResamplerConfig):

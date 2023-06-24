@@ -90,30 +90,12 @@ class EstimatorHandler:
                 weightifier=self._config.weightifier)
 
         fit_params = self._get_fit_params()
-        self._config.y_train = self._convert_to_new_scale(self._config.y_train)
-        if fit_params.get('y_val') is not None:
-            fit_params['y_val'] = self._convert_to_new_scale(
-                fit_params['y_val'])
 
         self.estimator.fit(self._config.X_train,
                            self._config.y_train, **fit_params)
 
         self._fitted = True
         self._save_estimator()
-
-    def _convert_to_new_scale(self, y: np.ndarray) -> np.ndarray:
-        """
-        Convert the predicted values and uncertainties to the original scale.
-        Args:
-            predicted_mean: Predicted mean values.
-            predicted_std: Predicted standard deviations.
-        Returns:
-            Tuple of arrays: converted predicted mean values and standard deviations.
-        """
-        prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
-        post_processor = ProcessYHandler(prop)
-        post_processor.fit(y)
-        return post_processor.transform(y)
 
     def _save_estimator(self):
         if self._config.file_path is not None:
