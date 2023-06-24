@@ -8,7 +8,13 @@ from sklearn.base import BaseEstimator
 import numpy as np
 import shap
 
-logger = logging.getLogger(__name__)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/shap_handler.log')
+logger.info('Saving logs from shap_handler.py')
+
+# TODO: currently if fitting_mode is False, it will load the explainer from shap_file_path. If  shap_file_path does not exist, it will raise an error. We should provide an option to use a precreated explainer instead. If both are provided, we'll have to figure out which one to use.
 
 
 class ShapHandler:

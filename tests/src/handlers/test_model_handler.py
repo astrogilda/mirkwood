@@ -1,3 +1,4 @@
+import pickle
 import os
 import random
 import string
@@ -7,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import NotFittedError
 from pathlib import Path
 from pydantic import ValidationError
+import tempfile
 
 from src.handlers.model_handler import ModelHandler, ModelHandlerConfig
 from src.transformers.xandy_transformers import TransformerConfig
@@ -196,3 +198,121 @@ def test_model_handler_config_non_1d_y_train():
             y_train=y_train,
             feature_names=["feature1", "feature2", "feature3"]
         )
+
+
+def test_model_handler_config_missing_X_train():
+    """
+    Test if a ValidationError is raised when X_train is missing and fitting_mode is True
+    """
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValidationError):
+        ModelHandlerConfig(
+            X_train=None,
+            y_train=y_train,
+            feature_names=["feature1", "feature2", "feature3"],
+            fitting_mode=True
+        )
+
+
+def test_model_handler_config_missing_y_train():
+    """
+    Test if a ValidationError is raised when y_train is missing and fitting_mode is True
+    """
+    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+    with pytest.raises(ValidationError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=None,
+            feature_names=["feature1", "feature2", "feature3"],
+            fitting_mode=True
+        )
+
+
+def test_model_handler_config_non_2d_X_val():
+    """
+    Test if a ValueError is raised when X_val is not 2-dimensional
+    """
+    X_val = np.array([1, 2, 3])
+    y_val = np.array([1, 2, 3])
+    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValueError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val,
+            feature_names=["feature1", "feature2", "feature3"]
+        )
+
+
+def test_model_handler_config_non_1d_y_val():
+    """
+    Test if a ValueError is raised when y_val is not 1-dimensional
+    """
+    X_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_train = np.array([1, 2, 3])
+
+    with pytest.raises(ValueError):
+        ModelHandlerConfig(
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val,
+            feature_names=["feature1", "feature2", "feature3"]
+        )
+
+
+class DummyEstimator:
+    def __init__(self):
+        self.estimator = 'dummy'
+        self.is_fitted = True
+
+
+def test_model_handler_config_fit_with_none_X_y_train():
+    """
+    Test if the fit function works when X_train and y_train are None and fitting_mode is False
+    """
+
+    dummy_model_handler = ModelHandler(
+        config=ModelHandlerConfig(
+            X_train=None,
+            y_train=None,
+            X_transformer=TransformerConfig(
+                name="standard_scaler", transformer=StandardScaler()),
+            y_transformer=TransformerConfig(
+                name="standard_scaler", transformer=StandardScaler()),
+            estimator=None,
+            feature_names=FEATURE_NAMES,
+            fitting_mode=False,
+            precreated_estimator=None,
+            file_path=None,
+        )
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False, mode="wb") as temp:
+        print(f"temp file path: {temp.name}")
+        dummy_model_handler._config.file_path = Path(temp.name)
+
+        # create a dummy object with `estimator` and `is_fitted` attributes
+        dummy_object = DummyEstimator()
+
+        # dump the dummy object into the temporary file
+        pickle.dump(dummy_object.__dict__, temp.file)
+
+        # Close the file to ensure it's written and not locked
+        temp.file.close()
+
+        # try:
+        dummy_model_handler.fit()
+        loaded_object = dummy_model_handler._estimator_handler
+
+        assert loaded_object.estimator == 'dummy'
+        assert loaded_object.is_fitted == True
+        # except Exception:
+        #    pytest.fail("ModelHandler.fit() raised an Exception unexpectedly!")

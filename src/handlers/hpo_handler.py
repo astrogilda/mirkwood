@@ -1,3 +1,4 @@
+from utils.logger import LoggingUtility
 from pydantic import ValidationError
 from typing import Sequence
 import logging
@@ -8,27 +9,36 @@ from optuna.distributions import BaseDistribution, FloatDistribution, IntDistrib
 from pydantic import BaseModel, Field, confloat, conint, validator
 from sklearn.base import clone
 from typing import Callable, List, Optional, Tuple, Union
-from sklearn.utils import check_X_y
 
 from src.handlers.model_handler import ModelConfig
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
 from src.transformers.xandy_transformers import XTransformer, YTransformer
-from utils.metrics import ProbabilisticErrorMetrics
+from utils.metrics import ProbabilisticErrorMetrics, calculate_z_score
 from utils.validate import validate_X_y
+import os
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# Suppressing the following warning: OMP: Info #270: omp_set_nested routine deprecated, please use omp_set_max_active_levels instead.
+os.environ['OMP_DISPLAY_ENV'] = 'FALSE'
+
+# Setting the logging level WARNING, the INFO logs are suppressed.
+optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def crps_scorer(y_true: np.ndarray, y_pred_mean: np.ndarray, y_pred_std: np.ndarray, z_score: float) -> float:
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/hpo_handler.log')
+logger.info('Saving logs from hpo_handler.py')
+
+
+def crps_scorer(y_true: np.ndarray, y_pred_mean: np.ndarray, y_pred_std: np.ndarray, confidence_level: float) -> float:
     """
     Custom Scoring Function.
     """
+    z_score = calculate_z_score(confidence_level)
     y_lower = y_pred_mean - z_score * y_pred_std
     y_upper = y_pred_mean + z_score * y_pred_std
 
     crps_metrics = ProbabilisticErrorMetrics(
-        yt=y_true, yp=y_pred_mean, yp_lower=y_lower, yp_upper=y_upper)
+        yt=y_true, yp=y_pred_mean, yp_lower=y_lower, yp_upper=y_upper, confidence_level=confidence_level)
     crps_score = crps_metrics.gaussian_crps()
     return -crps_score
 
@@ -59,18 +69,17 @@ class HPOHandlerConfig(BaseModel):
     param_grid: ParamGridConfig = Field(default=ParamGridConfig())
     n_trials: conint(ge=10) = Field(default=100)
     timeout: Optional[conint(gt=0)] = Field(default=30*60)
-    n_jobs: Optional[int] = Field(default=-1, ge=-1)
+    n_jobs: Optional[int] = Field(default=None, gt=0, le=os.cpu_count())
     loss: Optional[Callable] = Field(default=None)
     estimator: Optional[CustomTransformedTargetRegressor] = Field(default=None)
     cv: List[Tuple[Union[np.ndarray, list], Union[np.ndarray, list]]
              ] = Field(..., min_items=1)
-    z_score: confloat(gt=0, le=5) = Field(default=1.96)
+    confidence_level: confloat(gt=0, le=5) = Field(default=1.96)
 
     @validator('n_jobs')
     def check_n_jobs(cls, v):
-        if v == 0:
-            raise ValueError('n_jobs cannot be 0')
-        return v
+        if v is None:
+            return os.cpu_count()
 
     @validator('estimator', pre=True, always=True)
     def set_default_estimator(cls, v):
@@ -95,7 +104,7 @@ class HPOHandlerConfig(BaseModel):
         return v
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed: bool = True
 
 
 class HPOHandler:
@@ -108,13 +117,13 @@ class HPOHandler:
         self.weight_flag = weight_flag
         self.config = config
 
-    def train_model(self, params: dict, X_train: np.ndarray, y_train: np.ndarray, weight_flag: bool) -> CustomTransformedTargetRegressor:
+    def train_model(self, params: dict, X_train: np.ndarray, y_train: np.ndarray) -> CustomTransformedTargetRegressor:
         """
         Creates a new instance of the estimator, sets its parameters, fits it and returns it.
         """
         model = clone(self.config.estimator)
         model.set_params(**params)
-        model.fit(X_train, y_train, weight_flag=weight_flag)
+        model.fit(X_train, y_train, weight_flag=self.weight_flag)
         return model
 
     def objective(self, trial: Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
@@ -137,7 +146,7 @@ class HPOHandler:
                 raise ValueError(f"Unsupported distribution: {distribution}")
 
         # Clone and fit a new pipeline for this trial
-        pipeline = self.train_model(params, X_train, y_train, self.weight_flag)
+        pipeline = self.train_model(params, X_train, y_train)
 
         scores = []
         for train_index, val_index in self.config.cv:
@@ -151,7 +160,7 @@ class HPOHandler:
             y_val_fold_pred_std = pipeline.predict_std(X_val_fold)
 
             score = self.config.loss(y_true=y_val_fold, y_pred_mean=y_val_fold_pred_mean,
-                                     y_pred_std=y_val_fold_pred_std, z_score=self.config.z_score)
+                                     y_pred_std=y_val_fold_pred_std, confidence_level=self.config.confidence_level)
             scores.append(score)
 
         return np.mean(scores)
@@ -178,7 +187,8 @@ class HPOHandler:
         """
         X_train, y_train = validate_X_y(X_train, y_train)
         try:
-            study = optuna.create_study(direction='maximize')
+            study = optuna.create_study(
+                direction='maximize')
             study.optimize(lambda trial: self.objective(trial, X_train, y_train),
                            n_trials=self.config.n_trials, timeout=self.config.timeout, n_jobs=self.config.n_jobs)
 
@@ -190,7 +200,7 @@ class HPOHandler:
 
             # Use the new train_model method to fit the final model
             self.config.estimator = self.train_model(
-                best_params, X_train, y_train, self.weight_flag)
+                best_params, X_train, y_train)
 
         except Exception as e:
             logger.error(

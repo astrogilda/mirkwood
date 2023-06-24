@@ -15,8 +15,12 @@ import logging
 
 from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/customngb_regressor.log')
+logger.info('Saving logs from customngb_regressor.py')
+
 
 EPS = 1e-6
 

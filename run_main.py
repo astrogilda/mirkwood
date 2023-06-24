@@ -1,13 +1,57 @@
-from handlers.bootstrap_handler import BootstrapHandler
-from handlers.model_handler import ModelHandler
-from handlers.trainpredict_handler import TrainPredictHandler
+
+
 from functools import partial
-from handlers.data_handler import DataHandler, DataHandlerConfig, TrainData
+from sklearn.preprocessing import StandardScaler
+from pathlib import Path
+
+from src.handlers.bootstrap_handler import BootstrapHandler
+from src.handlers.model_handler import ModelHandler
+from src.handlers.trainpredict_handler import TrainPredictHandler, TrainPredictHandlerConfig
+from src.handlers.data_handler import DataHandler, DataHandlerConfig, TrainData
+from src.handlers.processy_handler import GalaxyProperty
+from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from utils.custom_cv import CustomCV
 
-
+galaxy_property = GalaxyProperty.STELLAR_MASS
+X_noise_percent = 0
+timeout_hpo = 3*60
+n_outer_folds = 3
+n_inner_folds = 3
+n_trials_hpo = 10
+num_bs_inner = 12
+num_bs_outer = 12
+results_dir = Path.cwd().joinpath('Results', 'Simba', 'StellarMass', 'XNoise0')
 data_handler = DataHandler(DataHandlerConfig())
-X, y = data_handler.get_data(TrainData.SIMBA)
+X, y = data_handler.get_data([TrainData.SIMBA], logX_flag=True)
+X, feature_names = X.values, list(X)
+y = y[galaxy_property.value].values
+
+# Train and save:
+tph_config = TrainPredictHandlerConfig(
+    X=X,
+    y=y,
+    feature_names=feature_names,
+    WEIGHT_FLAG=False,
+    galaxy_property=galaxy_property,
+    X_noise_percent=X_noise_percent,
+    timeout_hpo=timeout_hpo,
+    num_bs_inner=num_bs_inner,
+    num_bs_outer=num_bs_outer,
+    n_trials_hpo=n_trials_hpo,
+    n_outer_folds=n_outer_folds,
+    n_inner_folds=n_inner_folds,
+    X_transformer=XTransformer(),
+    y_transformer=YTransformer(transformers=[TransformerConfig(name="ss", transformer=StandardScaler())]),
+    file_path=results_dir.joinpath('estimator.pkl'),
+    shap_file_path=results_dir.joinpath('explainer.pkl'),
+)
+
+tph = TrainPredictHandler(tph_config)
+
+tph.train()
+
+# Load and predict
+
 
 
 class NestedCV:

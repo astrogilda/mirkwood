@@ -7,8 +7,12 @@ from typing import Optional, Union, Tuple, Dict, Callable, Type
 
 from enum import Enum
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/process_handler.log')
+logger.info('Saving logs from process_handler.py')
+
 
 EPS = 1e-8
 

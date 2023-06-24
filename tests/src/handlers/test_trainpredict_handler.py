@@ -14,7 +14,7 @@ from src.handlers.model_handler import ModelHandler
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Define the strategies for generating valid input data
-x_strategy = arrays(dtype=float, shape=st.integers(
+X_strategy = arrays(dtype=float, shape=st.integers(
     min_value=100, max_value=1000))
 y_strategy = arrays(dtype=float, shape=st.integers(
     min_value=100, max_value=1000))
@@ -26,11 +26,11 @@ int_strategy = st.integers(min_value=1, max_value=10)
 
 train_predict_handler_strategy = st.builds(
     TrainPredictHandler,
-    x=x_strategy,
+    X=X_strategy,
     y=y_strategy,
     n_folds=n_folds_strategy,
-    x_noise=st.none() | x_strategy,
-    x_transformer=st.none(),
+    x_noise=st.none() | X_strategy,
+    X_transformer=st.none(),
     y_transformer=st.none(),
     frac_samples=float_strategy,
     weight_bins=st.integers(min_value=1, max_value=100),
@@ -44,10 +44,10 @@ train_predict_handler_strategy = st.builds(
 
 train_predict_handler_strategy_invalid = st.builds(
     TrainPredictHandler,
-    x=x_strategy,
+    x=X_strategy,
     y=y_strategy,
     n_folds=n_folds_strategy,
-    x_noise=st.none() | x_strategy,
+    x_noise=st.none() | X_strategy,
     x_transformer=st.none(),
     y_transformer=st.none(),
     frac_samples=float_strategy,
@@ -205,7 +205,7 @@ def test_train_predict_with_transformers():
     # Create an instance of TrainPredictHandler with transformers
     transformer = StandardScaler()  # TransformerMixin()
     handler = TrainPredictHandler(
-        x=np.array(list(range(100))).reshape(-1, 1), y=np.array(list(range(100))), n_folds=2, x_transformer=transformer, y_transformer=transformer
+        x=np.array(list(range(100))).reshape(-1, 1), y=np.array(list(range(100))), n_folds=2, X_transformer=transformer, y_transformer=transformer
     )
 
     # Perform the train_predict operation

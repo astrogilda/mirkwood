@@ -7,8 +7,12 @@ from sklearn.base import BaseEstimator, TransformerMixin, clone
 import numpy as np
 import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/xandy_transformer.log')
+logger.info('Saving logs from xandy_transformer.py')
+
 
 EPS = 1e-6
 
@@ -25,6 +29,9 @@ class TransformerConfig(BaseModel):
 
 class TransformerBase(BaseModel):
     transformers: Optional[List[TransformerConfig]]
+
+    class Config:
+        arbitrary_types_allowed: bool = True
 
     @root_validator(pre=True)
     def validate_transformers(cls, values):

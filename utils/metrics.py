@@ -97,7 +97,7 @@ class ErrorMetricsBase(BaseModel):
     yp: np.ndarray = Field(..., description="Predicted values")
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed: bool = True
 
     def __init__(self, **data):
         super().__init__(**data)

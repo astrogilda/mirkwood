@@ -15,6 +15,7 @@ import logging
 import numpy as np
 from pathlib import Path
 
+from utils.reshape import reshape_to_1d_array, reshape_to_2d_array
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +185,21 @@ def check_estimator_compliance(estimator: BaseEstimator, skips: set = {}) -> Non
 
 
 def validate_X_y(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    X, y = check_X_y(X, y, force_all_finite=True, accept_sparse=False,
+    X, y = check_X_y(X, reshape_to_1d_array(y), force_all_finite=True, accept_sparse=False,
                      y_numeric=True, ensure_2d=True, allow_nd=False)
     return X, y
+
+
+def validate_X(X: np.ndarray) -> np.ndarray:
+    X = check_array(X, force_all_finite=True,
+                    accept_sparse=False, ensure_2d=True, allow_nd=False)
+    return X
+
+
+def validate_y(y: np.ndarray) -> np.ndarray:
+    y = check_array(yforce_all_finite=True, accept_sparse=False,
+                    ensure_2d=False, allow_nd=False)
+    return y
 
 
 '''

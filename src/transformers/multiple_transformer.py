@@ -10,24 +10,11 @@ from utils.transform_with_checks import apply_transform_with_checks
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
 
-# Create a custom logger
-logger = logging.getLogger(__name__)
-# This removes all handlers from the logger object, if any exist.
-for handler in logger.handlers[:]:
-    logger.removeHandler(handler)
-# prevent log events from being passed to the root logger
-logger.propagate = False
-# Set level of logging
-logger.setLevel(logging.INFO)
-# Create handlers
-handler = logging.FileHandler('multistep_transformer.log')
-handler.setLevel(logging.INFO)
-# Create formatters and add it to handlers
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-# Add handlers to the logger
-logger.addHandler(handler)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/multiple_transformer.log')
+logger.info('Saving logs from multiple_transformer.py')
 
 
 EPS = 1e-6

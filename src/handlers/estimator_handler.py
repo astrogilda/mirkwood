@@ -3,7 +3,6 @@ from joblib import dump, load
 from sklearn.exceptions import NotFittedError
 from typing import Dict, Any
 import numpy as np
-from sklearn.utils import check_X_y
 
 from src.regressors.customtransformedtarget_regressor import (
     CustomTransformedTargetRegressor, create_estimator)
@@ -11,7 +10,13 @@ from src.handlers.model_handler import ModelHandlerConfig
 from src.handlers.processy_handler import ProcessYHandler
 from utils.validate import validate_file_path
 
-logger = logging.getLogger(__name__)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/estimator_handler.log')
+logger.info('Saving logs from estimator_handler.py')
+
+# TODO: currently if fitting_mode is False, it will load the estimator from the file_path. If the file_path does not exist, it will raise an error. We should provide an option to use a precreated estimator instead. If both are provided, we'll have to figure out which one to use.
 
 
 class EstimatorHandler:
@@ -89,13 +94,6 @@ class EstimatorHandler:
         if fit_params.get('y_val') is not None:
             fit_params['y_val'] = self._convert_to_new_scale(
                 fit_params['y_val'])
-
-        # temporary, following a trace
-        print(f"galaxy property: {self._config.galaxy_property}")
-        X_train, y_train = self._config.X_train, self._config.y_train
-        X_train, y_train = check_X_y(
-            X_train, y_train, ensure_2d=True, y_numeric=True, force_all_finite=True)
-        self._config.X_train, self._config.y_train = X_train, y_train
 
         self.estimator.fit(self._config.X_train,
                            self._config.y_train, **fit_params)

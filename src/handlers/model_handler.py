@@ -1,3 +1,4 @@
+from utils.logger import LoggingUtility
 from typing import Optional, Dict
 from pydantic import BaseModel, validator
 import logging
@@ -12,7 +13,7 @@ from typing import Any, Optional, Tuple, List, Union
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 import numpy as np
 import shap
-from sklearn.utils.validation import check_array, check_X_y
+from sklearn.utils.validation import check_array
 
 from utils.validate import validate_input
 from utils.reshape import reshape_to_1d_array
@@ -28,18 +29,19 @@ warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
 warnings.filterwarnings("ignore", category=NumbaPendingDeprecationWarning)
 
 # Set up logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/model_handler.log')
+logger.info('Saving logs from model_handler.py')
+
 
 # TODO: more robust way to handle assignment of new X_transformer, y_transformer, of weightifier, after modelhandlerconfig has been instantiated. so one can continue to leverage pydantic's validations
-
 
 class ModelHandlerConfig(BaseModel):
     """
     Configuration class for ModelHandler.
     """
-    X_train: ndarray
-    y_train: ndarray
+    X_train: Optional[ndarray] = None
+    y_train: Optional[ndarray] = None
     feature_names: List[str]
     # Field(default=GalaxyProperty.STELLAR_MASS)
     galaxy_property: Optional[GalaxyProperty] = None
@@ -81,16 +83,22 @@ class ModelHandlerConfig(BaseModel):
         return value
 
     @validator('X_train', 'X_val', pre=True, always=True)
-    def validate_X_arrays(cls, value):
+    def validate_X_arrays(cls, value, values):
+        if 'fitting_mode' in values and values['fitting_mode'] and value is None:
+            raise ValueError(
+                'X_train cannot be None when fitting_mode is True')
         if value is not None:
             value = check_array(value)
         return value
 
     @validator('y_train', 'y_val', pre=True, always=True)
-    def validate_y_arrays(cls, value):
+    def validate_y_arrays(cls, value, values):
+        if 'fitting_mode' in values and values['fitting_mode'] and value is None:
+            raise ValueError(
+                'y_train cannot be None when fitting_mode is True')
         if value is not None:
             value = check_array(value, ensure_2d=False)
-            if value.ndim != 1:
+            if not ((value.ndim == 1) or (value.ndim == 2 and value.shape[1] == 1)):
                 raise ValueError("y arrays must be 1-dimensional")
         return value
 
@@ -105,6 +113,13 @@ class ModelHandlerConfig(BaseModel):
 
     @root_validator
     def validate(cls, values):
+        if 'fitting_mode' in values and values['fitting_mode']:
+            if 'X_train' not in values or values['X_train'] is None:
+                raise ValueError(
+                    'X_train cannot be None when fitting_mode is True')
+            if 'y_train' not in values or values['y_train'] is None:
+                raise ValueError(
+                    'y_train cannot be None when fitting_mode is True')
         cls._validate_X_y_pair('X_train', 'y_train', values)
         cls._validate_X_y_pair('X_val', 'y_val', values)
         return values
@@ -164,7 +179,8 @@ class ModelHandler:
         Returns:
             Tuple of arrays: predicted target variable and uncertainty.
         """
-        validate_input(np.ndarray, arg1=X_test)
+        if X_test is not None:
+            validate_input(np.ndarray, arg1=X_test)
         y_pred_mean, y_pred_std = self._predict_with_estimator(X_test)
 
         return y_pred_mean, y_pred_std
@@ -189,7 +205,8 @@ class ModelHandler:
         Returns:
             Array of SHAP values.
         """
-        validate_input(np.ndarray, arg1=X_test)
+        if X_test is not None:
+            validate_input(np.ndarray, arg1=X_test)
         shap_pred = self._calculate_shap_values_with_explainer(X_test)
         return shap_pred
 
@@ -215,6 +232,9 @@ class ModelHandler:
             raise NotFittedError(
                 "This ModelHandler instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.")
 
+        if X_test is None and self._config.X_val is None:
+            raise ValueError(
+                "X_test cannot be None when X_val in the config is None.")
         X = X_test if X_test is not None else self._config.X_val
         y_pred = self.estimator.predict(X)
         y_pred_std = self.estimator.predict_std(X)

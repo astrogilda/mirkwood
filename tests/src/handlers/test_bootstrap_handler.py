@@ -135,13 +135,16 @@ def test_bootstrap_multiprocessing():
 
     with Pool(processes=4) as pool:
         results = pool.map(bootstrap_handler.bootstrap, range(4))
-        for result in results:
-            y_val, y_pred_mean, y_pred_std, shap_values_mean, idx_ib, idx_oob = result
-            assert y_val.shape == y_pred_mean.shape
-            assert y_pred_mean.shape == y_pred_std.shape
-            assert model_handler._config.X_val.shape == shap_values_mean.shape
-            assert np.array_equal(np.sort(np.unique(np.concatenate((idx_ib, idx_oob)))
-                                          ), np.arange(model_handler._config.X_train.shape[0]))
+
+    assert len(results) == 4
+
+    for result in results:
+        y_val, y_pred_mean, y_pred_std, shap_values_mean, idx_ib, idx_oob = result
+        assert y_val.shape == y_pred_mean.shape
+        assert y_pred_mean.shape == y_pred_std.shape
+        assert model_handler._config.X_val.shape == shap_values_mean.shape
+        assert np.array_equal(np.sort(np.unique(np.concatenate((idx_ib, idx_oob)))
+                                      ), np.arange(model_handler._config.X_train.shape[0]))
 
 
 @pytest.mark.parametrize("data", [

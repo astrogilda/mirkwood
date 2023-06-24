@@ -35,6 +35,9 @@ class WeightifyConfig(BaseModel):
     beta: float = Field(
         0.9, description="Beta parameter for special style weighting.", ge=0, le=1)
 
+    class Config:
+        arbitrary_types_allowed: bool = True
+
 
 @jit(nopython=True)
 def calc_weights_jit(smoothed_value: np.ndarray) -> np.ndarray:

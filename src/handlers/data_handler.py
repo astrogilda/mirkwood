@@ -10,7 +10,11 @@ from pydantic import BaseModel, Field, validator, parse_obj_as, confloat
 from enum import Enum
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+from utils.logger import LoggingUtility
+
+logger = LoggingUtility.get_logger(
+    __name__, log_file='logs/data_handler.log')
+logger.info('Saving logs from data_handler.py')
 
 
 class TrainData(str, Enum):
@@ -100,7 +104,11 @@ class DataHandlerConfig(BaseModel):
     mulfac: float = Field(
         1.0, gt=0.0, le=10.0, description="Multiplicative factor applied to the X matrix.")
     datasets: Dict[str, DataSet] = Field(default_factory=dict)
-    simulation_path: str = Field(default=Path.cwd().joinpath('Simulations'))
+    simulation_path: str = Field(default=str(
+        Path.cwd().joinpath('Simulations')))
+
+    class Config:
+        arbitrary_types_allowed: bool = True
 
     @root_validator
     def check_datasets(cls, values):
@@ -146,7 +154,7 @@ class DataHandler:
             simulation_path=self.config.simulation_path)
         self.mulfac = self.config.mulfac
 
-    def get_data(self, train_data: List[TrainData]) -> Tuple[pd.DataFrame, np.ndarray]:
+    def get_data(self, train_data: List[TrainData], logX_flag: bool = True) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Load and preprocess datasets.
 
@@ -174,6 +182,8 @@ class DataHandler:
             y_list.append(dataset.y)
 
         X = pd.concat(X_list, axis=0).reset_index(drop=True)
+        if logX_flag:
+            X = np.log10(X)
         y = pd.concat(y_list, axis=0).reset_index(drop=True)
 
         return X * self.config.mulfac, y

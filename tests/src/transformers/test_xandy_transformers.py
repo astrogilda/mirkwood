@@ -86,13 +86,13 @@ def test_transformer_invalid_configuration(input_data):
 
 
 def test_empty_transformer_configuration():
-    x_transformer = XTransformer(transformers=[])
-    assert x_transformer.transformers == []
+    X_transformer = XTransformer(transformers=[])
+    assert X_transformer.transformers == []
 
-    x_transformer = XTransformer(transformers=None)
-    assert x_transformer.transformers[0].name == "standard_scaler"
+    X_transformer = XTransformer(transformers=None)
+    assert X_transformer.transformers[0].name == "standard_scaler"
     assert isinstance(
-        x_transformer.transformers[0].transformer, StandardScaler)
+        X_transformer.transformers[0].transformer, StandardScaler)
 
     y_transformer = YTransformer(transformers=[])
     assert y_transformer.transformers == []
