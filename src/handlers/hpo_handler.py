@@ -62,22 +62,38 @@ class ParamGridConfig(BaseModel):
         arbitrary_types_allowed = True
 
 
+class HPOHandlerBaseConfig(BaseModel):
+    num_trials_hpo: conint(ge=10) = Field(default=100, alias="n_trials_hpo")
+    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
+    num_jobs_hpo: Optional[int] = Field(
+        default=os.cpu_count(), gt=0, le=os.cpu_count(), alias="n_jobs_hpo", description="Number of HPO jobs to run in parallel")
+    confidence_level: float = Field(0.67, gt=0, le=1)
+
+    class Config:
+        arbitrary_types_allowed: bool = True
+
+    @validator('num_jobs_hpo')
+    def check_num_jobs_hpo(cls, v):
+        if v is None:
+            return os.cpu_count()
+
+
 class HPOHandlerConfig(BaseModel):
     """
     Pydantic model for the parameters of HPOHandler.
     """
+    num_trials_hpo: conint(ge=10) = Field(default=100)
+    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
+    num_jobs_hpo: Optional[int] = Field(default=None, gt=0, le=os.cpu_count())
+    confidence_level: float = Field(0.67, gt=0, le=1)
     param_grid: ParamGridConfig = Field(default=ParamGridConfig())
-    n_trials: conint(ge=10) = Field(default=100)
-    timeout: Optional[conint(gt=0)] = Field(default=30*60)
-    n_jobs: Optional[int] = Field(default=None, gt=0, le=os.cpu_count())
     loss: Optional[Callable] = Field(default=None)
     estimator: Optional[CustomTransformedTargetRegressor] = Field(default=None)
     cv: List[Tuple[Union[np.ndarray, list], Union[np.ndarray, list]]
              ] = Field(..., min_items=1)
-    confidence_level: confloat(gt=0, le=5) = Field(default=1.96)
 
-    @validator('n_jobs')
-    def check_n_jobs(cls, v):
+    @validator('num_jobs_hpo')
+    def check_num_jobs_hpo(cls, v):
         if v is None:
             return os.cpu_count()
 
@@ -190,7 +206,7 @@ class HPOHandler:
             study = optuna.create_study(
                 direction='maximize')
             study.optimize(lambda trial: self.objective(trial, X_train, y_train),
-                           n_trials=self.config.n_trials, timeout=self.config.timeout, n_jobs=self.config.n_jobs)
+                           n_trials=self.config.num_trials_hpo, timeout=self.config.timeout_hpo, n_jobs=self.config.num_jobs_hpo)
 
             self.best_trial = study.best_trial
 

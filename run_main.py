@@ -8,18 +8,18 @@ from src.handlers.bootstrap_handler import BootstrapHandler
 from src.handlers.model_handler import ModelHandler
 from src.handlers.trainpredict_handler import TrainPredictHandler, TrainPredictHandlerConfig
 from src.handlers.data_handler import DataHandler, DataHandlerConfig, TrainData
-from transformers.yscaler import GalaxyProperty
+from src.transformers.yscaler import GalaxyProperty, YScaler
 from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from utils.custom_cv import CustomCV
 
 galaxy_property = GalaxyProperty.STELLAR_MASS
 X_noise_percent = 0
-timeout_hpo = 3*60
+timeout_hpo = 2*60
 n_outer_folds = 3
 n_inner_folds = 3
 n_trials_hpo = 10
-num_bs_inner = 12
-num_bs_outer = 12
+num_bs_inner = 5
+num_bs_outer = 5
 results_dir = Path.cwd().joinpath('Results', 'Simba', 'StellarMass', 'XNoise0')
 data_handler = DataHandler(DataHandlerConfig())
 X, y = data_handler.get_data([TrainData.SIMBA], logX_flag=True)
@@ -41,7 +41,7 @@ tph_config = TrainPredictHandlerConfig(
     n_outer_folds=n_outer_folds,
     n_inner_folds=n_inner_folds,
     X_transformer=XTransformer(),
-    y_transformer=YTransformer(transformers=[TransformerConfig(name="ss", transformer=StandardScaler())]),
+    y_transformer=YTransformer(transformers=[TransformerConfig(name="yscaler", transformer=YScaler(prop=galaxy_property.value)), TransformerConfig(name="ss", transformer=StandardScaler())]),
     file_path=results_dir.joinpath('estimator.pkl'),
     shap_file_path=results_dir.joinpath('explainer.pkl'),
 )

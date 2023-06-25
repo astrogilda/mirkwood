@@ -7,13 +7,14 @@ import scipy.stats as stats
 import pandas as pd
 import logging
 import os
+from sklearn.preprocessing import StandardScaler
 
 from src.handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
 from src.handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
 from src.handlers.data_handler import DataHandler
-from transformers.yscaler import GalaxyProperty
+from src.transformers.yscaler import GalaxyProperty, YScaler
 from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig
-from src.transformers.xandy_transformers import XTransformer, YTransformer
+from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from src.regressors.customtransformedtarget_regressor import create_estimator
 from utils.custom_cv import CustomCV
 from utils.weightify import Weightify
@@ -25,35 +26,39 @@ class TrainPredictHandlerConfig(BaseModel):
     TrainPredictHandler class for training and predicting an estimator using
     cross-validation, bootstrapping, and parallel computing.
     """
-
+    # ModelHandlerBaseConfig
     X: np.ndarray
     y: np.ndarray
     feature_names: List[str]
+    galaxy_property: Optional[GalaxyProperty] = None
     X_test: Optional[np.ndarray] = None
     y_test: Optional[np.ndarray] = None
+    weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
+    fitting_mode: bool = True
+    file_path: Optional[Path] = None
+    shap_file_path: Optional[Path] = None
+    model_config: ModelConfig = ModelConfig()
+    X_transformer: XTransformer = XTransformer(
+        transformers=None)
+    y_transformer: YTransformer = YTransformer(
+        transformers=[TransformerConfig(name="rescaley", transformer=YScaler()), TransformerConfig(name="standard_scaler", transformer=StandardScaler())])
+    weightifier: Weightify = Weightify()
+    # HPOHandlerBaseConfig
     confidence_level: float = Field(0.67, gt=0, le=1)
+    num_jobs_hpo: Optional[int] = Field(
+        default=os.cpu_count(), gt=0, le=os.cpu_count(), alias="n_jobs_hpo", description="Number of HPO jobs to run in parallel")
+    num_trials_hpo: conint(ge=10) = Field(default=100, alias="n_trials_hpo")
+    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
+    # BootstrapHandlerBaseConfig
+    frac_samples: float = Field(0.8, gt=0, le=1)
+    replace: bool = Field(default=True)
+    #
+    X_noise_percent: float = Field(default=0, ge=0, le=1)
     num_folds_outer: int = Field(default=5, ge=2, le=20, alias="n_folds_outer")
     num_folds_inner: int = Field(
         default=5, ge=2, le=20, alias="n_folds_innter")
     num_bs_inner: int = Field(50, alias="n_bs_inner")
     num_bs_outer: int = Field(50, alias="n_bs_outer")
-    num_jobs_hpo: Optional[int] = Field(
-        default=None, gt=0, le=os.cpu_count(), alias="n_jobs_hpo", description="Number of HPO jobs to run in parallel")
-    num_trials_hpo: conint(ge=10) = Field(default=100, alias="n_trials_hpo")
-    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
-    X_noise_percent: float = Field(default=0, ge=0, le=1)
-    X_transformer: XTransformer = XTransformer(
-        transformers=None)
-    y_transformer: YTransformer = YTransformer(
-        transformers=None)
-    weightifier: Weightify = Weightify()
-    model_config: ModelConfig = ModelConfig()
-    frac_samples: float = Field(0.8, gt=0, le=1)
-    galaxy_property: Optional[GalaxyProperty] = None
-    fitting_mode: bool = True
-    weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    file_path: Optional[Path] = None
-    shap_file_path: Optional[Path] = None
 
     class Config:
         arbitrary_types_allowed: bool = True
@@ -192,7 +197,7 @@ class TrainPredictHandler:
 
             # Perform bootstrapping
             with Pool(os.cpu_count()) as p:
-                args = ((bootstrap_handler, j)
+                args = ((bootstrap_handler, j+1)
                         for j in range(self._config.num_bs_inner))
                 concat_output = p.starmap(BootstrapHandler.bootstrap, args)
             bootstrap_outputs = TrainPredictHandler.process_concat_output(
@@ -247,7 +252,7 @@ class TrainPredictHandler:
 
     def _prepare_bootstrap_handler(self, model_handler):
         bootstrap_handler_config = BootstrapHandlerConfig(
-            frac_samples=self._config.frac_samples, replace=True)
+            frac_samples=self._config.frac_samples, replace=self._config.replace)
         bootstrap_handler = BootstrapHandler(
             model_handler=model_handler, bootstrap_config=bootstrap_handler_config)
         return bootstrap_handler

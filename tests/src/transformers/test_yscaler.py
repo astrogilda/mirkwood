@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from sklearn.utils.validation import NotFittedError
 
-from transformers.yscaler import YScaler
+from src.transformers.yscaler import YScaler
 
 
 def test_processy_stellar_mass():

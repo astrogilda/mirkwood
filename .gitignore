@@ -154,9 +154,14 @@ make_plots.py
 make_plots_optimized.py
 
 
-# ignore the results folder
+# ignore the results and logs folder
 Results/**
 Results/
+logs/**
+logs/
+
+#ignore gitignore
+.gitignore
 
 
 

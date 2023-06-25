@@ -1,10 +1,7 @@
 from utils.logger import LoggingUtility
 from typing import Optional, Dict
 from pydantic import BaseModel, validator
-import logging
 import warnings
-from joblib import dump, load
-from numpy import ndarray
 from pathlib import Path
 from pydantic import BaseModel, Field, root_validator
 from sklearn.exceptions import NotFittedError
@@ -21,8 +18,7 @@ from utils.weightify import Weightify
 from src.regressors.customngb_regressor import ModelConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer
 from src.regressors.customtransformedtarget_regressor import CustomTransformedTargetRegressor, create_estimator
-from transformers.yscaler import YScaler
-from transformers.yscaler import GalaxyProperty
+from src.transformers.yscaler import GalaxyProperty
 
 # Suppress deprecation warnings
 warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
@@ -42,13 +38,13 @@ class ModelHandlerConfig(BaseModel):
     """
     Configuration class for ModelHandler.
     """
-    X_train: Optional[ndarray] = None
-    y_train: Optional[ndarray] = None
+    X_train: Optional[np.ndarray] = None
+    y_train: Optional[np.ndarray] = None
     feature_names: List[str]
     # Field(default=GalaxyProperty.STELLAR_MASS)
     galaxy_property: Optional[GalaxyProperty] = None
-    X_val: Optional[ndarray] = None
-    y_val: Optional[ndarray] = None
+    X_val: Optional[np.ndarray] = None
+    y_val: Optional[np.ndarray] = None
     weight_flag: bool = Field(
         False, description="Flag to indicate whether to use weights in the loss function")
     fitting_mode: bool = Field(
@@ -171,13 +167,9 @@ class ModelHandler:
         """
         Fit the model by invoking the fit method of the estimator handler.
         """
-        self._config.y_train = self._convert_to_new_scale(self._config.y_train)
-        if self._config.y_val is not None:
-            self._config.y_val = self._convert_to_new_scale(self._config.y_val)
-
         self._estimator_handler.fit()
 
-    def predict(self, X_test: Optional[ndarray]) -> Tuple[ndarray, ndarray]:
+    def predict(self, X_test: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Predict target variable and uncertainty given features.
         Args:
@@ -203,7 +195,7 @@ class ModelHandler:
         self._shap_handler.create(
             self.estimator.regressor_.named_steps['regressor'])
 
-    def calculate_shap_values(self, X_test: Optional[ndarray]) -> Optional[ndarray]:
+    def calculate_shap_values(self, X_test: Optional[np.ndarray]) -> Optional[np.ndarray]:
         """
         Calculate SHAP values for the given test features.
         Args:
@@ -216,7 +208,7 @@ class ModelHandler:
         shap_pred = self._calculate_shap_values_with_explainer(X_test)
         return shap_pred
 
-    def _calculate_shap_values_with_explainer(self, X_test: Optional[ndarray]) -> Optional[ndarray]:
+    def _calculate_shap_values_with_explainer(self, X_test: Optional[np.ndarray]) -> Optional[np.ndarray]:
 
         if not self._estimator_handler.is_fitted:
             raise NotFittedError(
@@ -226,7 +218,7 @@ class ModelHandler:
         shap_pred = self.explainer.shap_values(X_test, check_additivity=False)
         return shap_pred
 
-    def _predict_with_estimator(self, X_test: Optional[ndarray]) -> Tuple[ndarray, ndarray]:
+    def _predict_with_estimator(self, X_test: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Perform prediction using the estimator.
         Args:
@@ -245,36 +237,4 @@ class ModelHandler:
         y_pred = self.estimator.predict(X)
         y_pred_std = self.estimator.predict_std(X)
 
-        # if self._config.galaxy_property is not None:
-        y_pred, y_pred_std = self._convert_to_original_scale(
-            y_pred, y_pred_std)
-
         return reshape_to_1d_array(y_pred), reshape_to_1d_array(y_pred_std) if y_pred_std is not None else None
-
-    def _convert_to_original_scale(self, predicted_mean: ndarray, predicted_std: Optional[ndarray]) -> Tuple[ndarray, Optional[ndarray]]:
-        """
-        Convert the predicted values and uncertainties to the original scale.
-        Args:
-            predicted_mean: Predicted mean values.
-            predicted_std: Predicted standard deviations.
-        Returns:
-            Tuple of arrays: converted predicted mean values and standard deviations.
-        """
-        prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
-        post_processor = YScaler(prop)
-        post_processor.fit(predicted_mean)
-        return post_processor.inverse_transform(predicted_mean), post_processor.inverse_transform(predicted_std) if predicted_std is not None else None
-
-    def _convert_to_new_scale(self, y: np.ndarray) -> np.ndarray:
-        """
-        Convert the predicted values and uncertainties to the original scale.
-        Args:
-            predicted_mean: Predicted mean values.
-            predicted_std: Predicted standard deviations.
-        Returns:
-            Tuple of arrays: converted predicted mean values and standard deviations.
-        """
-        prop = self._config.galaxy_property.value if self._config.galaxy_property is not None else None
-        post_processor = YScaler(prop)
-        post_processor.fit(y)
-        return post_processor.transform(y)
