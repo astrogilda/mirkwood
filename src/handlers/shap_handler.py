@@ -89,7 +89,7 @@ class ShapHandler:
         if self._config.precreated_explainer is not None:
             self.explainer = self._config.precreated_explainer
         else:
-            data_train = self._get_shap_data(self._config.X_train)
+            data_train = self._get_shap_data(self._config.X)
             if not hasattr(fitted_base_estimator, "predict_std") or not hasattr(fitted_base_estimator, "predict_dist"):
                 self.explainer = shap.TreeExplainer(
                     fitted_base_estimator, data=data_train, feature_names=self._config.feature_names)

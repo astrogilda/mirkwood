@@ -27,20 +27,20 @@ def test_cv_is_empty(setup_data):
     X_train, _, y_train, _, param_grid, _ = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(param_grid=param_grid,
-                         n_trials=10, loss=crps_scorer, cv=[])
+                         n_trials_hpo=10, loss=crps_scorer, cv=[])
 
 
 def test_cv_has_non_tuple_elements(setup_data):
     X_train, _, y_train, _, param_grid, _ = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(
-            param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[np.array([1, 2, 3])])
+            param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=[np.array([1, 2, 3])])
 
 
 def test_cv_has_tuple_elements_of_wrong_size(setup_data):
     X_train, _, y_train, _, param_grid, _ = setup_data
     with pytest.raises(ValidationError):
-        HPOHandlerConfig(param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[
+        HPOHandlerConfig(param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=[
             (np.array([1, 2, 3]), np.array([1, 2, 3]), np.array([1, 2, 3]))])
 
 
@@ -48,13 +48,13 @@ def test_cv_has_tuple_elements_of_wrong_type(setup_data):
     X_train, _, y_train, _, param_grid, _ = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(
-            param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[('wrong', 'type')])
+            param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=[('wrong', 'type')])
 
 
 def test_cv_has_2d_arrays(setup_data):
     X_train, _, y_train, _, param_grid, _ = setup_data
     with pytest.raises(ValidationError):
-        HPOHandlerConfig(param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=[
+        HPOHandlerConfig(param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=[
             (np.array([[1, 2, 3], [4, 5, 6]]), np.array([[7, 8, 9], [10, 11, 12]]))])
 
 
@@ -62,28 +62,28 @@ def test_hpo_handler_fit_with_invalid_n_trials(setup_data):
     X_train, _, y_train, _, param_grid, cv = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(
-            param_grid=param_grid, n_trials=-10, loss=crps_scorer, cv=cv, timeout=5*60)
+            param_grid=param_grid, n_trials_hpo=-10, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
 
-def test_hpo_handler_fit_with_invalid_timeout(setup_data):
+def test_hpo_handler_fit_with_invalid_timeout_hpo(setup_data):
     X_train, _, y_train, _, param_grid, cv = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(
-            param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=-5*60)
+            param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=cv, timeout_hpo=-5*60)
 
 
 def test_hpo_handler_fit_with_invalid_loss_function(setup_data):
     X_train, _, y_train, _, param_grid, cv = setup_data
     with pytest.raises(ValidationError):
         HPOHandlerConfig(
-            param_grid=param_grid, n_trials=10, loss="not_a_function", cv=cv, timeout=5*60)
+            param_grid=param_grid, n_trials_hpo=10, loss="not_a_function", cv=cv, timeout_hpo=5*60)
 
 
 def test_hpo_handler_no_data_fit(setup_data):
     _, _, _, _, param_grid, cv = setup_data
 
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
     hpo = HPOHandler(config=config)
 
@@ -95,7 +95,7 @@ def test_hpo_handler_predict_without_fit(setup_data):
     _, _, _, _, param_grid, cv = setup_data
 
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
     hpo = HPOHandler(config=config)
 
@@ -107,7 +107,7 @@ def test_hpo_handler_predict_std_without_fit(setup_data):
     _, _, _, _, param_grid, cv = setup_data
 
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
     hpo = HPOHandler(config=config)
 
@@ -119,8 +119,8 @@ def test_hpo_handler_fit_with_empty_param_grid(setup_data):
     """Passing an empty list as param_grid should raise a ValidationError, PROVIDED cv is not provided. If cv is provided, the param_grid is set to its default value"""
     X_train, _, y_train, _, _, cv = setup_data
     param_grid = []
-    HPOHandlerConfig(param_grid=param_grid, n_trials=10,
-                     loss=crps_scorer, cv=cv, timeout=5*60)
+    HPOHandlerConfig(param_grid=param_grid, n_trials_hpo=10,
+                     loss=crps_scorer, cv=cv, timeout_hpo=5*60)
     with pytest.raises(ValidationError):
         HPOHandlerConfig(param_grid=param_grid)
 
@@ -129,16 +129,16 @@ def test_hpo_handler_fit_with_no_loss_function(setup_data):
     """This should not raise a ValidationError, since a loss of None results in the score function being used in CustomTransformedTargetRegressor"""
     X_train, _, y_train, _, param_grid, cv = setup_data
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=10, loss=None, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=10, loss=None, cv=cv, timeout_hpo=5*60)
 
 
 @settings(max_examples=2, deadline=None, suppress_health_check=(HealthCheck.function_scoped_fixture,))
-@given(st.integers(min_value=11, max_value=100))
-def test_hpo_handler_fit_and_predict_and_predict_std(n_trials, setup_data):
+@given(n_trials_hpo=st.integers(min_value=11, max_value=100))
+def test_hpo_handler_fit_and_predict_and_predict_std(n_trials_hpo, setup_data):
     X_train, X_val, y_train, y_val, param_grid, cv = setup_data
 
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=n_trials, loss=crps_scorer, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=n_trials_hpo, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
     hpo = HPOHandler(config=config)
     hpo.fit(X_train, y_train)
@@ -172,7 +172,7 @@ def test_hpo_handler_with_invalid_param(params, setup_data):
     )
 
     config = HPOHandlerConfig(
-        param_grid=param_grid, n_trials=10, loss=crps_scorer, cv=cv, timeout=5*60)
+        param_grid=param_grid, n_trials_hpo=10, loss=crps_scorer, cv=cv, timeout_hpo=5*60)
 
     hpo = HPOHandler(config=config)
 

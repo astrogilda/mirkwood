@@ -10,10 +10,10 @@ import os
 from sklearn.preprocessing import StandardScaler
 
 from src.handlers.bootstrap_handler import BootstrapHandler, BootstrapHandlerConfig
-from src.handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig
+from src.handlers.model_handler import ModelHandler, ModelHandlerConfig, ModelConfig, ModelHandlerBaseConfig
 from src.handlers.data_handler import DataHandler
 from src.transformers.yscaler import GalaxyProperty, YScaler
-from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig
+from src.handlers.hpo_handler import HPOHandler, HPOHandlerConfig, HPOHandlerBaseConfig
 from src.transformers.xandy_transformers import XTransformer, YTransformer, TransformerConfig
 from src.regressors.customtransformedtarget_regressor import create_estimator
 from utils.custom_cv import CustomCV
@@ -21,38 +21,11 @@ from utils.weightify import Weightify
 from utils.metrics import ProbabilisticErrorMetrics, calculate_z_score
 
 
-class TrainPredictHandlerConfig(BaseModel):
+class TrainPredictHandlerConfig(ModelHandlerBaseConfig, HPOHandlerBaseConfig, BootstrapHandlerConfig):
     """
     TrainPredictHandler class for training and predicting an estimator using
     cross-validation, bootstrapping, and parallel computing.
     """
-    # ModelHandlerBaseConfig
-    X: np.ndarray
-    y: np.ndarray
-    feature_names: List[str]
-    galaxy_property: Optional[GalaxyProperty] = None
-    X_test: Optional[np.ndarray] = None
-    y_test: Optional[np.ndarray] = None
-    weight_flag: bool = Field(False, alias="WEIGHT_FLAG")
-    fitting_mode: bool = True
-    file_path: Optional[Path] = None
-    shap_file_path: Optional[Path] = None
-    model_config: ModelConfig = ModelConfig()
-    X_transformer: XTransformer = XTransformer(
-        transformers=None)
-    y_transformer: YTransformer = YTransformer(
-        transformers=[TransformerConfig(name="rescaley", transformer=YScaler()), TransformerConfig(name="standard_scaler", transformer=StandardScaler())])
-    weightifier: Weightify = Weightify()
-    # HPOHandlerBaseConfig
-    confidence_level: float = Field(0.67, gt=0, le=1)
-    num_jobs_hpo: Optional[int] = Field(
-        default=os.cpu_count(), gt=0, le=os.cpu_count(), alias="n_jobs_hpo", description="Number of HPO jobs to run in parallel")
-    num_trials_hpo: conint(ge=10) = Field(default=100, alias="n_trials_hpo")
-    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
-    # BootstrapHandlerBaseConfig
-    frac_samples: float = Field(0.8, gt=0, le=1)
-    replace: bool = Field(default=True)
-    #
     X_noise_percent: float = Field(default=0, ge=0, le=1)
     num_folds_outer: int = Field(default=5, ge=2, le=20, alias="n_folds_outer")
     num_folds_inner: int = Field(
@@ -62,64 +35,6 @@ class TrainPredictHandlerConfig(BaseModel):
 
     class Config:
         arbitrary_types_allowed: bool = True
-
-    @validator('file_path', pre=True)
-    def validate_file_path(cls, value, values):
-        if not values.get('fitting_mode') and not value.exists():
-            raise FileNotFoundError(f"File at {value} not found.")
-        return value
-
-    @validator('X', 'X_test')
-    def _check_X_dimension(cls, v: np.ndarray) -> np.ndarray:
-        """Validate if the input X array is two-dimensional"""
-        if v is not None and len(v.shape) != 2:
-            raise ValueError("X should be 2-dimensional")
-        return v
-
-    @validator('y', 'y_test', pre=True)
-    def _check_y_dimension(cls, v: np.ndarray) -> np.ndarray:
-        """Validate if the input y array is one-dimensional or two-dimensional with second dimension 1"""
-        if v is not None:
-            if len(v.shape) == 1:
-                v = v.reshape(-1, 1)
-            elif len(v.shape) != 2 or (len(v.shape) == 2 and v.shape[1] != 1):
-                raise ValueError(
-                    "y should be 1-dimensional or 2-dimensional with second dimension 1")
-        return v
-
-    @validator('X_transformer', 'y_transformer', pre=True)
-    def validate_transformers(cls, v, values, **kwargs):
-        if not isinstance(v, (XTransformer, YTransformer)):
-            raise ValueError("Invalid transformer provided")
-        return v
-
-    @validator('model_config', pre=True)
-    def validate_model_config(cls, v, values, **kwargs):
-        if not isinstance(v, ModelConfig):
-            raise ValueError("Invalid model configuration provided")
-        return v
-
-    @root_validator
-    def validate_array_lengths(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        X, y, X_test, y_test = values.get('X'), values.get(
-            'y'), values.get('X_test'), values.get('y_test')
-
-        # Check if X and y have the same number of samples
-        if X is not None and y is not None and X.shape[0] != y.shape[0]:
-            raise ValueError("X and y should have the same number of samples")
-
-        # Check if X_test and y_test have the same number of samples
-        if X_test is not None and y_test is not None and X_test.shape[0] != y_test.shape[0]:
-            raise ValueError(
-                "X_test and y_test should have the same number of samples")
-
-        return values
-
-    @validator('galaxy_property', pre=True)
-    def validate_galaxy_property(cls, v, values, **kwargs):
-        if not isinstance(v, GalaxyProperty):
-            raise ValueError("Invalid galaxy property provided")
-        return v
 
     @validator('X_noise_percent', pre=True)
     def validate_X_noise_percent(cls, v, values, **kwargs):

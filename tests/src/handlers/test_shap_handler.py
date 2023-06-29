@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 @pytest.fixture
 def dummy_shap_handler_config():
     return ModelHandlerConfig(
-        X_train=np.random.randn(100, len(FEATURE_NAMES)),
-        y_train=np.random.randn(100),
+        X=np.random.randn(100, len(FEATURE_NAMES)),
+        y=np.random.randn(100),
         fitting_mode=True,
         file_path=None,
         shap_file_path=None,
@@ -56,7 +56,7 @@ def test_create_explainer(dummy_shap_handler: ShapHandler, dummy_shap_handler_co
     """
     if should_pass:
         dummy_shap_handler.create(model.fit(
-            dummy_shap_handler_config.X_train, dummy_shap_handler_config.y_train))
+            dummy_shap_handler_config.X, dummy_shap_handler_config.y))
         assert isinstance(dummy_shap_handler.explainer, shap.TreeExplainer)
     else:
         with pytest.raises(ValueError):
@@ -68,8 +68,8 @@ def test_create_explainer(dummy_shap_handler: ShapHandler, dummy_shap_handler_co
 def test_save_and_load_explainer(dummy_shap_handler: ShapHandler, dummy_shap_handler_config: ModelHandlerConfig, fit, valid_filepath, caplog):
     model = RandomForestRegressor()
     if fit:
-        model.fit(dummy_shap_handler_config.X_train,
-                  dummy_shap_handler_config.y_train)
+        model.fit(dummy_shap_handler_config.X,
+                  dummy_shap_handler_config.y)
         dummy_shap_handler.create(model)
 
     if valid_filepath:

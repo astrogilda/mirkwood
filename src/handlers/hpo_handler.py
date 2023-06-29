@@ -77,15 +77,17 @@ class HPOHandlerBaseConfig(BaseModel):
         if v is None:
             return os.cpu_count()
 
+    def __str__(self):
+        """
+        This will return a string representing the configuration object.
+        """
+        return f"HPOHandlerBaseConfig({self.dict()})"
 
-class HPOHandlerConfig(BaseModel):
+
+class HPOHandlerConfig(HPOHandlerBaseConfig):
     """
     Pydantic model for the parameters of HPOHandler.
     """
-    num_trials_hpo: conint(ge=10) = Field(default=100)
-    timeout_hpo: Optional[conint(gt=0)] = Field(default=30*60)
-    num_jobs_hpo: Optional[int] = Field(default=None, gt=0, le=os.cpu_count())
-    confidence_level: float = Field(0.67, gt=0, le=1)
     param_grid: ParamGridConfig = Field(default=ParamGridConfig())
     loss: Optional[Callable] = Field(default=None)
     estimator: Optional[CustomTransformedTargetRegressor] = Field(default=None)
@@ -121,6 +123,12 @@ class HPOHandlerConfig(BaseModel):
 
     class Config:
         arbitrary_types_allowed: bool = True
+
+    def __str__(self):
+        """
+        This will return a string representing the configuration object.
+        """
+        return f"HPOHandlerConfig({self.dict()})"
 
 
 class HPOHandler:

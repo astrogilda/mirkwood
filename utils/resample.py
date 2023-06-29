@@ -53,6 +53,7 @@ def _numba_resample_and_oob(idx: np.ndarray, frac_samples: float, seed: int, rep
 
 
 class ResamplerConfig(BaseModel):
+    # TODO: explain why "strict" was set to True
     frac_samples: confloat(gt=0, le=1, strict=True) = Field(
         default=1, description='Fraction of samples to draw for resampling.')
     seed: conint(ge=0, lt=2**32) = Field(

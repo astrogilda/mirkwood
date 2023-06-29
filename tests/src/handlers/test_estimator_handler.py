@@ -17,7 +17,7 @@ def dummy_estimator_handler():
     """Return an EstimatorHandler instance with dummy data."""
     X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     y = np.array([1, 2, 3])
-    config = ModelHandlerConfig(X_train=X, y_train=y, feature_names=[
+    config = ModelHandlerConfig(X=X, y=y, feature_names=[
                                 "feature1", "feature2", "feature3"])
     return EstimatorHandler(config)
 
@@ -31,8 +31,8 @@ def test_save_and_load_estimator(dummy_estimator_handler, fit, valid_filepath, c
         with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as temp:
             dummy_estimator_handler._config.file_path = temp.name
             if fit:
-                model.fit(dummy_estimator_handler._config.X_train,
-                          dummy_estimator_handler._config.y_train)
+                model.fit(dummy_estimator_handler._config.X,
+                          dummy_estimator_handler._config.y)
                 dummy_estimator_handler._estimator = model
                 dummy_estimator_handler._fitted = True
 
@@ -98,12 +98,12 @@ def test_precreated_estimator(dummy_estimator_handler):
         dummy_estimator_handler._config.model_config,
         dummy_estimator_handler._config.X_transformer,
         dummy_estimator_handler._config.y_transformer)
-    precreated_estimator.fit(dummy_estimator_handler._config.X_train,
-                             dummy_estimator_handler._config.y_train)
+    precreated_estimator.fit(dummy_estimator_handler._config.X,
+                             dummy_estimator_handler._config.y)
 
     config = ModelHandlerConfig(
-        X_train=dummy_estimator_handler._config.X_train,
-        y_train=dummy_estimator_handler._config.y_train,
+        X=dummy_estimator_handler._config.X,
+        y=dummy_estimator_handler._config.y,
         feature_names=dummy_estimator_handler._config.feature_names,
         precreated_estimator=precreated_estimator
     )
@@ -120,15 +120,15 @@ def test_fit(dummy_estimator_handler):
 
 
 def test_fit_with_validation_data(dummy_estimator_handler):
-    X_val = np.array([[1, 2, 3]])
-    y_val = np.array([1])
+    X_test = np.array([[1, 2, 3]])
+    y_test = np.array([1])
 
     config = ModelHandlerConfig(
-        X_train=dummy_estimator_handler._config.X_train,
-        y_train=dummy_estimator_handler._config.y_train,
+        X=dummy_estimator_handler._config.X,
+        y=dummy_estimator_handler._config.y,
         feature_names=dummy_estimator_handler._config.feature_names,
-        X_val=X_val,
-        y_val=y_val
+        X_test=X_test,
+        y_test=y_test
     )
     validation_data_estimator_handler = EstimatorHandler(config)
     validation_data_estimator_handler.fit()
@@ -136,14 +136,14 @@ def test_fit_with_validation_data(dummy_estimator_handler):
 
 
 def test_incompatible_X_train_y_train(dummy_estimator_handler):
-    dummy_estimator_handler._config.y_train = np.array([1, 2, 3, 4])
+    dummy_estimator_handler._config.y = np.array([1, 2, 3, 4])
     with pytest.raises(ValueError):
         dummy_estimator_handler.fit()
 
 
 def test_incompatible_X_val_y_val(dummy_estimator_handler):
-    dummy_estimator_handler._config.X_val = np.array([[1, 2, 3]])
-    dummy_estimator_handler._config.y_val = np.array([1, 2])
+    dummy_estimator_handler._config.X_test = np.array([[1, 2, 3]])
+    dummy_estimator_handler._config.y_test = np.array([1, 2])
     with pytest.raises(ValueError):
         dummy_estimator_handler.fit()
 
@@ -170,12 +170,6 @@ def test_invalid_galaxy_property(dummy_estimator_handler):
     """This won't fail because YScaler will function as passthrough if galaxy_property is None."""
     dummy_estimator_handler._config.galaxy_property = None
     dummy_estimator_handler.fit()
-
-
-def test_convert_to_new_scale_before_fit(dummy_estimator_handler):
-    """This won't fail because _convert_to_new_scale does not require the model to be fitted; it is meerely a nice way to access YScaler."""
-    dummy_estimator_handler._convert_to_new_scale(
-        dummy_estimator_handler._config.y_train)
 
 
 def test_save_estimator_no_permissions(dummy_estimator_handler):

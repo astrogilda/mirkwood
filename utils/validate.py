@@ -185,19 +185,25 @@ def check_estimator_compliance(estimator: BaseEstimator, skips: set = {}) -> Non
 
 
 def validate_X_y(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    X, y = check_X_y(X, reshape_to_1d_array(y), force_all_finite=True, accept_sparse=False,
+    if (X is None) or (y is None):
+        raise ValueError("Both X and y must be finite, non-None arrays.")
+    X, y = check_X_y(X, reshape_to_1d_array(y), force_all_finite=True, accept_sparse=True,
                      y_numeric=True, ensure_2d=True, allow_nd=False)
     return X, y
 
 
 def validate_X(X: np.ndarray) -> np.ndarray:
+    if X is None:
+        raise ValueError("X must be a finite, non-None array.")
     X = check_array(X, force_all_finite=True,
-                    accept_sparse=False, ensure_2d=True, allow_nd=False)
+                    accept_sparse=True, ensure_2d=True, allow_nd=False)
     return X
 
 
 def validate_y(y: np.ndarray) -> np.ndarray:
-    y = check_array(yforce_all_finite=True, accept_sparse=False,
+    if y is None:
+        raise ValueError("y must be a finite, non-None array.")
+    y = check_array(yforce_all_finite=True, accept_sparse=True,
                     ensure_2d=False, allow_nd=False)
     return y
 

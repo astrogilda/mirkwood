@@ -24,8 +24,8 @@ def dummy_model_handler():
     y = np.array([1, 2, 3])
     return ModelHandler(
         config=ModelHandlerConfig(
-            X_train=X,
-            y_train=y,
+            X=X,
+            y=y,
             X_transformer=TransformerConfig(
                 name="standard_scaler", transformer=StandardScaler()),
             y_transformer=TransformerConfig(
@@ -43,14 +43,14 @@ def test_fit(dummy_model_handler: ModelHandler):
 
 @pytest.mark.parametrize("fit_before_predict", [True, False])
 def test_predict(dummy_model_handler: ModelHandler, fit_before_predict):
-    x_val = np.random.randn(10, len(FEATURE_NAMES))
+    X_test = np.random.randn(10, len(FEATURE_NAMES))
 
     if not fit_before_predict:
         with pytest.raises(NotFittedError):
-            dummy_model_handler.predict(X_test=x_val)
+            dummy_model_handler.predict(X_test=X_test)
     else:
         dummy_model_handler.fit()
-        results = dummy_model_handler.predict(X_test=x_val)
+        results = dummy_model_handler.predict(X_test=X_test)
         assert len(results) == 2
         assert isinstance(results[0], np.ndarray)
         assert isinstance(results[1], np.ndarray)
@@ -107,8 +107,8 @@ def test_empty_X_train():
     y = np.array([1, 2, 3])
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=X,
-            y_train=y,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
@@ -118,8 +118,8 @@ def test_unequal_X_y_length():
     y = np.array([1, 2, 3])
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X,
-            y_train=y,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
@@ -129,8 +129,8 @@ def test_non_matching_feature_names():
     y = np.array([1, 2, 3])
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=X,
-            y_train=y,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2"]
         )
 
@@ -141,8 +141,8 @@ def test_invalid_fit_params():
 
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=X,
-            y_train=y,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"],
             weight_flag="qwerty",
             model_config="abc"
@@ -150,66 +150,66 @@ def test_invalid_fit_params():
 
 
 def test_model_handler_config_mismatched_val_arrays():
-    X_val = np.array([[1, 2, 3], [4, 5, 6]])
-    y_val = np.array([1, 2])
-    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    y_train = np.array([1, 2, 3])
+    X_test = np.array([[1, 2, 3], [4, 5, 6]])
+    y_test = np.array([1, 2])
+    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_val,
-            y_val=y_val
+            X=X,
+            y=y,
+            X_test=X_test,
+            y_test=y_test
         )
 
 
 def test_model_handler_config_invalid_array():
-    X_train = 'invalid_array'
-    y_train = np.array([1, 2, 3])
+    X = 'invalid_array'
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
 
 def test_model_handler_config_non_2d_X_train():
-    X_train = np.array([1, 2, 3])
-    y_train = np.array([1, 2, 3])
+    X = np.array([1, 2, 3])
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
 
 def test_model_handler_config_non_1d_y_train():
-    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    y_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
+            X=X,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
 
 def test_model_handler_config_missing_X_train():
     """
-    Test if a ValidationError is raised when X_train is missing and fitting_mode is True
+    Test if a ValidationError is raised when X is missing and fitting_mode is True
     """
-    y_train = np.array([1, 2, 3])
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=None,
-            y_train=y_train,
+            X=None,
+            y=y,
             feature_names=["feature1", "feature2", "feature3"],
             fitting_mode=True
         )
@@ -217,53 +217,53 @@ def test_model_handler_config_missing_X_train():
 
 def test_model_handler_config_missing_y_train():
     """
-    Test if a ValidationError is raised when y_train is missing and fitting_mode is True
+    Test if a ValidationError is raised when y is missing and fitting_mode is True
     """
-    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
     with pytest.raises(ValidationError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=None,
+            X=X,
+            y=None,
             feature_names=["feature1", "feature2", "feature3"],
             fitting_mode=True
         )
 
 
-def test_model_handler_config_non_2d_X_val():
+def test_model_handler_config_non_2d_X_test():
     """
-    Test if a ValueError is raised when X_val is not 2-dimensional
+    Test if a ValueError is raised when X_test is not 2-dimensional
     """
-    X_val = np.array([1, 2, 3])
-    y_val = np.array([1, 2, 3])
-    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    y_train = np.array([1, 2, 3])
+    X_test = np.array([1, 2, 3])
+    y_test = np.array([1, 2, 3])
+    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_val,
-            y_val=y_val,
+            X=X,
+            y=y,
+            X_test=X_test,
+            y_test=y_test,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
 
 def test_model_handler_config_non_1d_y_val():
     """
-    Test if a ValueError is raised when y_val is not 1-dimensional
+    Test if a ValueError is raised when y_test is not 1-dimensional
     """
-    X_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    y_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    X_train = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    y_train = np.array([1, 2, 3])
+    X_test = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y_test = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    y = np.array([1, 2, 3])
 
     with pytest.raises(ValueError):
         ModelHandlerConfig(
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_val,
-            y_val=y_val,
+            X=X,
+            y=y,
+            X_test=X_test,
+            y_test=y_test,
             feature_names=["feature1", "feature2", "feature3"]
         )
 
@@ -276,13 +276,13 @@ class DummyEstimator:
 
 def test_model_handler_config_fit_with_none_X_y_train():
     """
-    Test if the fit function works when X_train and y_train are None and fitting_mode is False
+    Test if the fit function works when X and y are None and fitting_mode is False
     """
 
     dummy_model_handler = ModelHandler(
         config=ModelHandlerConfig(
-            X_train=None,
-            y_train=None,
+            X=None,
+            y=None,
             X_transformer=TransformerConfig(
                 name="standard_scaler", transformer=StandardScaler()),
             y_transformer=TransformerConfig(

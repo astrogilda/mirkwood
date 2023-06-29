@@ -90,8 +90,8 @@ class EstimatorHandler:
 
         fit_params = self._get_fit_params()
 
-        self.estimator.fit(self._config.X_train,
-                           self._config.y_train, **fit_params)
+        self.estimator.fit(self._config.X,
+                           self._config.y, **fit_params)
 
         self._fitted = True
         self._save_estimator()
@@ -133,7 +133,7 @@ class EstimatorHandler:
             A dictionary of fit parameters.
         """
         fit_params = {'weight_flag': self._config.weight_flag}
-        if self._config.X_val is not None:
-            fit_params['X_val'] = self._config.X_val
-            fit_params['y_val'] = self._config.y_val
+        if self._config.X_test is not None:
+            fit_params['X_val'] = self._config.X_test
+            fit_params['y_val'] = self._config.y_test
         return fit_params
